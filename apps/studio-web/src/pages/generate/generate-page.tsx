@@ -1,7 +1,7 @@
 import { TaskHistoryStream } from "@/features/task-history/task-history-stream";
-import { useComposerStore } from "@/lib/stores/composer-store";
+
+const projectId = "00000000-0000-4000-8000-000000000001";
 
 export function GeneratePage() {
-  const tasks = useComposerStore((state) => state.tasks);
-  return <TaskHistoryStream tasks={tasks} />;
+  return <TaskHistoryStream projectId={projectId} />;
 }

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Copy, Eye, Film, PanelRightClose, PenLine, Trash2, Upload } from "lucide-react";
 import { AssetIcon } from "@/components/domain/asset-icon";
 import { StatusBadge } from "@/components/domain/status-badge";
@@ -9,10 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { completeAssetUpload, presignAssetUpload, uploadAssetBytes } from "@/lib/api/assets-api";
+import { generationTasksKey, listGenerationTasks } from "@/lib/api/generation-api";
 import { cn } from "@/lib/utils";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 type AssetTab = "assets" | "tasks";
+const projectId = "00000000-0000-4000-8000-000000000001";
 
 function toSizeLabel(sizeBytes: number): string {
   if (sizeBytes >= 1024 * 1024) return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -39,14 +42,17 @@ function IconAction({ children, danger = false, label }: { children: ReactNode; 
 export function AssetsPage() {
   const [activeTab, setActiveTab] = useState<AssetTab>("assets");
   const assets = useComposerStore((state) => state.assets);
-  const tasks = useComposerStore((state) => state.tasks);
   const upsertAsset = useComposerStore((state) => state.upsertAsset);
   const setAssetStatus = useComposerStore((state) => state.setAssetStatus);
   const removeAsset = useComposerStore((state) => state.removeAsset);
+  const tasksQuery = useQuery({
+    queryKey: generationTasksKey(projectId),
+    queryFn: () => listGenerationTasks(projectId)
+  });
+  const tasks = tasksQuery.data ?? [];
   const selectedTask = tasks[0];
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [retryFiles, setRetryFiles] = useState<Record<string, File>>({});
-  const projectId = useMemo(() => tasks[0]?.projectId ?? "00000000-0000-4000-8000-000000000001", [tasks]);
 
   async function uploadOne(file: File): Promise<string | null> {
     const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;

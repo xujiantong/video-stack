@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { DEFAULT_GENERATION_PARAMETERS, type AssetMention, type GenerationParameters, type GenerationTask } from "@video-stack/shared";
+import { DEFAULT_GENERATION_PARAMETERS, type AssetMention, type GenerationParameters } from "@video-stack/shared";
 
 export type StudioView = "inspiration" | "generate" | "assets" | "settings" | "api";
 
@@ -20,7 +20,6 @@ type ComposerState = {
   assetRefs: AssetMention[];
   parameters: GenerationParameters;
   assets: StudioAsset[];
-  tasks: GenerationTask[];
   setView(view: StudioView): void;
   setPrompt(prompt: string): void;
   setPromptDoc(promptDoc: Record<string, unknown>, assetRefs: AssetMention[], promptText: string): void;
@@ -28,10 +27,7 @@ type ComposerState = {
   upsertAsset(asset: StudioAsset): void;
   setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
   removeAsset(assetId: string): void;
-  addTask(task: GenerationTask): void;
 };
-
-const now = new Date().toISOString();
 
 export const useComposerStore = create<ComposerState>((set) => ({
   view: "generate",
@@ -69,72 +65,6 @@ export const useComposerStore = create<ComposerState>((set) => ({
       references: 2,
       createdAt: "昨天 21:45",
       status: "ready"
-    }
-  ],
-  tasks: [
-    {
-      id: "00000000-0000-4000-8000-000000000201",
-      projectId: "00000000-0000-4000-8000-000000000001",
-      provider: "jimeng",
-      promptText: "生成 8 秒产品展示视频",
-      parameters: DEFAULT_GENERATION_PARAMETERS,
-      assetRefs: [],
-      status: "succeeded",
-      estimatedCostCents: 860,
-      actualCostCents: 860,
-      requiresSecondConfirm: false,
-      resultAssetId: "00000000-0000-4000-8000-000000000301",
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000202",
-      projectId: "00000000-0000-4000-8000-000000000001",
-      provider: "jimeng",
-      promptText: "把镜头改成俯拍，增加字幕",
-      parameters: DEFAULT_GENERATION_PARAMETERS,
-      assetRefs: [],
-      status: "running",
-      estimatedCostCents: 1120,
-      actualCostCents: null,
-      requiresSecondConfirm: false,
-      resultAssetId: null,
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000203",
-      projectId: "00000000-0000-4000-8000-000000000001",
-      provider: "jimeng",
-      promptText: "使用 @包装主图 展示产品旋转，镜头从微距拉到全景。",
-      parameters: DEFAULT_GENERATION_PARAMETERS,
-      assetRefs: [],
-      status: "queued",
-      estimatedCostCents: 1480,
-      actualCostCents: null,
-      requiresSecondConfirm: false,
-      resultAssetId: null,
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000204",
-      projectId: "00000000-0000-4000-8000-000000000001",
-      provider: "jimeng",
-      promptText: "当前模型不支持音频参考，请移除 @旁白音色 或切换模型。",
-      parameters: DEFAULT_GENERATION_PARAMETERS,
-      assetRefs: [],
-      status: "failed",
-      estimatedCostCents: 980,
-      actualCostCents: null,
-      requiresSecondConfirm: false,
-      resultAssetId: null,
-      errorMessage: "当前模型不支持音频参考，请移除音频或切换模型。",
-      createdAt: now,
-      updatedAt: now
     }
   ],
   setView(view) {
@@ -180,8 +110,5 @@ export const useComposerStore = create<ComposerState>((set) => ({
   },
   removeAsset(assetId) {
     set((state) => ({ assets: state.assets.filter((asset) => asset.id !== assetId) }));
-  },
-  addTask(task) {
-    set((state) => ({ tasks: [task, ...state.tasks] }));
   }
 }));

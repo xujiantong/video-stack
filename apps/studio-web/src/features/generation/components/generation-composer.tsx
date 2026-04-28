@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Calculator, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
 import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
 import { ModelParameterToolbar } from "./model-parameter-toolbar";
 import { PromptEditor } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { createGenerationTask, estimateGeneration, listGenerationModels } from "@/lib/api/generation-api";
+import { createGenerationTask, estimateGeneration, generationTaskKey, generationTasksKey, listGenerationModels } from "@/lib/api/generation-api";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
 const credentialId = "00000000-0000-4000-8000-000000000401";
 
 export function GenerationComposer() {
+  const queryClient = useQueryClient();
   const [confirmEstimate, setConfirmEstimate] = useState<EstimateGenerationResponse | null>(null);
   const prompt = useComposerStore((state) => state.prompt);
   const promptDoc = useComposerStore((state) => state.promptDoc);
@@ -21,7 +22,6 @@ export function GenerationComposer() {
   const assets = useComposerStore((state) => state.assets);
   const setPromptDoc = useComposerStore((state) => state.setPromptDoc);
   const setParameters = useComposerStore((state) => state.setParameters);
-  const addTask = useComposerStore((state) => state.addTask);
 
   const modelsQuery = useQuery({
     queryKey: ["models"],
@@ -48,7 +48,12 @@ export function GenerationComposer() {
         fallbackEstimate: input.estimate
       }),
     onSuccess(task) {
-      addTask(task);
+      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(projectId), (tasks) => {
+        const nextTasks = tasks?.filter((item) => item.id !== task.id) ?? [];
+        return [task, ...nextTasks];
+      });
+      queryClient.setQueryData(generationTaskKey(task.id), task);
+      void queryClient.invalidateQueries({ queryKey: generationTasksKey(projectId) });
       setConfirmEstimate(null);
     }
   });

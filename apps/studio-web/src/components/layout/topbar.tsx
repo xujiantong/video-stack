@@ -1,4 +1,6 @@
 import { ChevronDown, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 export function Topbar() {
@@ -14,21 +16,22 @@ export function Topbar() {
       <div className="hidden min-w-0 flex-1 items-center justify-end gap-2 lg:flex">
         <label className="relative w-full max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <input
+          <Input
             aria-label="搜索"
-            className="h-9 w-full rounded-button border border-border bg-input pl-9 pr-3 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary"
+            className="h-9 pl-9"
             placeholder="搜索素材、任务或提示词"
           />
         </label>
         {["今天", "视频生成", "全部操作"].map((label) => (
-          <button
-            className="inline-flex h-9 items-center gap-2 rounded-button border border-border bg-muted px-3 text-sm text-foreground transition hover:border-primary"
+          <Button
+            className="h-9"
             key={label}
             type="button"
+            variant="secondary"
           >
             {label}
             <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-          </button>
+          </Button>
         ))}
       </div>
     </header>

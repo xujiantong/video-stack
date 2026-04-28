@@ -73,23 +73,25 @@ export function GenerationComposer() {
           <PromptEditor assets={assets} prompt={prompt} onPromptChange={setPrompt} />
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             {["视频生成", "Seedance 2.0", "全能参考", "16:9", "1080P", "15s"].map((item) => (
-              <button
-                className="inline-flex h-8 items-center gap-1 rounded-button border border-border bg-muted px-3 text-xs text-foreground transition hover:border-primary"
+              <Button
+                className="h-8 px-3 text-xs"
                 key={item}
                 type="button"
+                variant="secondary"
               >
                 {item}
                 <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-              </button>
+              </Button>
             ))}
-            <button
+            <Button
               aria-label="打开资产引用菜单"
-              className="inline-flex h-8 items-center gap-1 rounded-button border border-border bg-muted px-3 text-xs text-primary transition hover:border-primary"
+              className="h-8 px-3 text-xs text-primary"
               type="button"
+              variant="secondary"
             >
               <AtSign className="size-3" aria-hidden="true" />
               引用
-            </button>
+            </Button>
           </div>
         </div>
         <div className="relative flex flex-col justify-between gap-3">
@@ -108,12 +110,12 @@ export function GenerationComposer() {
           <div className="rounded-popover border border-border bg-background/80 p-2 shadow-popover">
             <p className="mb-2 text-xs text-muted-foreground">可能 @ 的内容</p>
             {assets.map((asset) => (
-              <button className="flex w-full items-center gap-2 rounded-button px-2 py-2 text-left text-xs hover:bg-muted" key={asset.id} type="button">
+              <Button className="h-auto w-full justify-start px-2 py-2 text-xs" key={asset.id} type="button" variant="ghost">
                 <span className="grid size-7 place-items-center rounded-button bg-muted text-primary">
                   <Upload className="size-3" aria-hidden="true" />
                 </span>
                 <span>@{asset.label}</span>
-              </button>
+              </Button>
             ))}
           </div>
           <div className="grid grid-cols-[1fr_auto] gap-2">

@@ -8,3 +8,14 @@ test("user can estimate and create a generation task", async ({ page }) => {
   await page.getByRole("main").getByRole("button", { name: "生成", exact: true }).click();
   await expect(page.getByText("排队中").first()).toBeVisible();
 });
+
+test("user can switch asset and task tables", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { exact: true, name: "资产" }).click();
+  await expect(page.getByRole("tab", { name: "资产库" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("cell", { name: "包装主图" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "任务列表" }).click();
+  await expect(page.getByRole("tab", { name: "任务列表" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "复制参数" }).first()).toBeVisible();
+});

@@ -1,127 +1,167 @@
+import { useState, type ReactNode } from "react";
 import { Copy, Eye, Film, PanelRightClose, PenLine, Trash2, Upload } from "lucide-react";
 import { AssetIcon } from "@/components/domain/asset-icon";
 import { StatusBadge } from "@/components/domain/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Drawer, DrawerBody, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
+type AssetTab = "assets" | "tasks";
+
+function IconAction({ children, danger = false, label }: { children: ReactNode; danger?: boolean; label: string }) {
+  return (
+    <Tooltip label={label}>
+      <Button aria-label={label} className={cn("size-8 px-0", danger && "text-danger")} type="button" variant="ghost">
+        {children}
+      </Button>
+    </Tooltip>
+  );
+}
+
 export function AssetsPage() {
+  const [activeTab, setActiveTab] = useState<AssetTab>("assets");
   const assets = useComposerStore((state) => state.assets);
   const tasks = useComposerStore((state) => state.tasks);
   const selectedTask = tasks[0];
 
   return (
     <div className="grid min-h-full grid-cols-1 gap-4 p-4 pb-28 xl:grid-cols-[1fr_360px]">
-      <div className="space-y-4">
+      <Tabs>
         <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex rounded-button border border-border bg-muted p-1">
-            <button className="rounded-button bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" type="button">
+          <TabsList>
+            <TabsTrigger active={activeTab === "assets"} onClick={() => setActiveTab("assets")}>
               资产库
-            </button>
-            <button className="rounded-button px-3 py-1.5 text-sm text-muted-foreground" type="button">
+            </TabsTrigger>
+            <TabsTrigger active={activeTab === "tasks"} onClick={() => setActiveTab("tasks")}>
               任务列表
-            </button>
-          </div>
+            </TabsTrigger>
+          </TabsList>
           <Button type="button">
             <Upload className="size-4" aria-hidden="true" />
             上传素材
           </Button>
         </div>
 
-        <section className="overflow-hidden rounded-card border border-border bg-surface">
-          <div className="grid grid-cols-[64px_1.2fr_0.7fr_0.7fr_0.7fr_1fr_96px] border-b border-border px-3 py-2 text-xs text-muted-foreground">
-            <span>缩略图</span>
-            <span>名称</span>
-            <span>类型</span>
-            <span>大小</span>
-            <span>引用次数</span>
-            <span>创建时间</span>
-            <span>操作</span>
-          </div>
-          {assets.map((asset) => (
-            <div
-              className="grid grid-cols-[64px_1.2fr_0.7fr_0.7fr_0.7fr_1fr_96px] items-center border-b border-border px-3 py-3 text-sm last:border-b-0"
-              key={asset.id}
-            >
-              <AssetIcon asset={asset} />
-              <span className="font-medium">{asset.label}</span>
-              <span className="text-muted-foreground">{asset.fileType}</span>
-              <span className="text-muted-foreground">{asset.sizeLabel}</span>
-              <span>{asset.references}</span>
-              <span className="text-muted-foreground">{asset.createdAt}</span>
-              <div className="flex gap-1">
-                <Button aria-label="查看资产" className="size-8 px-0" type="button" variant="ghost">
-                  <Eye className="size-4" aria-hidden="true" />
-                </Button>
-                <Button aria-label="删除资产" className="size-8 px-0 text-danger" type="button" variant="ghost">
-                  <Trash2 className="size-4" aria-hidden="true" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </section>
+        {activeTab === "assets" ? (
+          <TabsContent>
+            <Table className="min-w-[860px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">缩略图</TableHead>
+                  <TableHead>名称</TableHead>
+                  <TableHead>类型</TableHead>
+                  <TableHead>大小</TableHead>
+                  <TableHead>引用次数</TableHead>
+                  <TableHead>创建时间</TableHead>
+                  <TableHead className="w-24">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assets.map((asset) => (
+                  <TableRow key={asset.id}>
+                    <TableCell>
+                      <AssetIcon asset={asset} />
+                    </TableCell>
+                    <TableCell className="font-medium">{asset.label}</TableCell>
+                    <TableCell className="text-muted-foreground">{asset.fileType}</TableCell>
+                    <TableCell className="text-muted-foreground">{asset.sizeLabel}</TableCell>
+                    <TableCell>{asset.references}</TableCell>
+                    <TableCell className="text-muted-foreground">{asset.createdAt}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <IconAction label="查看资产">
+                          <Eye className="size-4" aria-hidden="true" />
+                        </IconAction>
+                        <IconAction danger label="删除资产">
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </IconAction>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TabsContent>
+        ) : (
+          <TabsContent>
+            <Table className="min-w-[920px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>提示词摘要</TableHead>
+                  <TableHead>模型</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>费用</TableHead>
+                  <TableHead>时间</TableHead>
+                  <TableHead className="w-44">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tasks.map((task) => (
+                  <TableRow key={task.id}>
+                    <TableCell className="max-w-72">
+                      <span className="line-clamp-1">{task.promptText}</span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">Seedance 2.0</TableCell>
+                    <TableCell>
+                      <StatusBadge status={task.status} />
+                    </TableCell>
+                    <TableCell>
+                      <Badge tone="warning">¥{(task.estimatedCostCents / 100).toFixed(2)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">今天</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <IconAction label="查看任务">
+                          <Eye className="size-4" aria-hidden="true" />
+                        </IconAction>
+                        <IconAction label="重新编辑">
+                          <PenLine className="size-4" aria-hidden="true" />
+                        </IconAction>
+                        <IconAction label="复制参数">
+                          <Copy className="size-4" aria-hidden="true" />
+                        </IconAction>
+                        <IconAction danger label="删除任务">
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </IconAction>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TabsContent>
+        )}
+      </Tabs>
 
-        <section className="overflow-hidden rounded-card border border-border bg-surface">
-          <div className="grid grid-cols-[1.5fr_0.8fr_0.7fr_0.6fr_0.8fr_180px] border-b border-border px-3 py-2 text-xs text-muted-foreground">
-            <span>提示词摘要</span>
-            <span>模型</span>
-            <span>状态</span>
-            <span>费用</span>
-            <span>时间</span>
-            <span>操作</span>
-          </div>
-          {tasks.map((task) => (
-            <div
-              className="grid grid-cols-[1.5fr_0.8fr_0.7fr_0.6fr_0.8fr_180px] items-center border-b border-border px-3 py-3 text-sm last:border-b-0"
-              key={task.id}
-            >
-              <span className="line-clamp-1">{task.promptText}</span>
-              <span className="text-muted-foreground">Seedance 2.0</span>
-              <StatusBadge status={task.status} />
-              <span className="text-warning">¥{(task.estimatedCostCents / 100).toFixed(2)}</span>
-              <span className="text-muted-foreground">今天</span>
-              <div className="flex gap-1">
-                <Button aria-label="查看任务" className="size-8 px-0" type="button" variant="ghost">
-                  <Eye className="size-4" aria-hidden="true" />
-                </Button>
-                <Button aria-label="重新编辑" className="size-8 px-0" type="button" variant="ghost">
-                  <PenLine className="size-4" aria-hidden="true" />
-                </Button>
-                <Button aria-label="复制参数" className="size-8 px-0" type="button" variant="ghost">
-                  <Copy className="size-4" aria-hidden="true" />
-                </Button>
-                <Button aria-label="删除任务" className="size-8 px-0 text-danger" type="button" variant="ghost">
-                  <Trash2 className="size-4" aria-hidden="true" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </section>
-      </div>
-
-      <aside className="rounded-card border border-border bg-surface p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">任务详情</h2>
-          <Button aria-label="关闭详情" className="size-8 px-0" type="button" variant="ghost">
+      <Drawer>
+        <DrawerHeader>
+          <DrawerTitle>任务详情</DrawerTitle>
+          <IconAction label="关闭详情">
             <PanelRightClose className="size-4" aria-hidden="true" />
-          </Button>
-        </div>
+          </IconAction>
+        </DrawerHeader>
         <div className="mt-4 aspect-video rounded-card border border-border bg-background">
           <div className="grid h-full place-items-center text-muted-foreground">
             <Film className="size-8" aria-hidden="true" />
           </div>
         </div>
-        <div className="mt-4 space-y-4 text-sm">
+        <DrawerBody>
           <section>
             <p className="mb-2 text-xs uppercase text-muted-foreground">原始提示词</p>
             <p className="rounded-card bg-muted p-3 leading-6">{selectedTask?.promptText}</p>
           </section>
           <section>
             <p className="mb-2 text-xs uppercase text-muted-foreground">参数快照</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-2">
               {["Seedance 2.0", "全能参考", "16:9", "1080P", "15s", "¥8.60"].map((item) => (
-                <span className="rounded-button border border-border bg-muted px-2 py-2" key={item}>
+                <Badge className="justify-center py-2" key={item}>
                   {item}
-                </span>
+                </Badge>
               ))}
             </div>
           </section>
@@ -133,8 +173,8 @@ export function AssetsPage() {
               ))}
             </div>
           </section>
-        </div>
-      </aside>
+        </DrawerBody>
+      </Drawer>
     </div>
   );
 }

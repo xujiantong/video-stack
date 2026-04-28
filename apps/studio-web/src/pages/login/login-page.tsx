@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function LoginPage() {
   return (
@@ -8,8 +9,8 @@ export function LoginPage() {
         <h1 className="mt-2 text-xl font-semibold">登录影栈 Studio</h1>
         <p className="mt-2 text-sm text-muted-foreground">使用官方 API 成本运行的视频生成工作台。</p>
         <div className="mt-5 grid gap-3">
-          <input className="h-10 rounded-button border border-border bg-input px-3 text-sm outline-none focus:border-primary" placeholder="邮箱" />
-          <input className="h-10 rounded-button border border-border bg-input px-3 text-sm outline-none focus:border-primary" placeholder="密码" type="password" />
+          <Input placeholder="邮箱" />
+          <Input placeholder="密码" type="password" />
           <Button type="button">登录</Button>
         </div>
       </section>

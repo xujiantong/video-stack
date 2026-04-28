@@ -1,14 +1,16 @@
 import { CheckCircle2, CircleDashed, Clock3, MoreHorizontal, PenLine, Play, RefreshCcw, XCircle } from "lucide-react";
 import type { GenerationTask } from "@video-stack/shared";
+import { statusLabel } from "@/components/domain/status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-const statusLabel: Record<GenerationTask["status"], string> = {
-  draft: "草稿",
-  queued: "排队中",
-  running: "运行中",
-  succeeded: "已完成",
-  failed: "失败",
-  canceled: "已取消"
+const statusTone: Record<GenerationTask["status"], "muted" | "primary" | "warning" | "danger" | "success"> = {
+  draft: "muted",
+  queued: "warning",
+  running: "primary",
+  succeeded: "success",
+  failed: "danger",
+  canceled: "muted"
 };
 
 function StatusIcon({ status }: { status: GenerationTask["status"] }) {
@@ -32,10 +34,10 @@ export function TaskHistoryStream({ tasks }: { tasks: GenerationTask[] }) {
                 </span>
                 <span className="line-clamp-1">{task.promptText}</span>
               </div>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-button border border-border bg-muted px-2 py-1 text-xs">
+              <Badge className="shrink-0" tone={statusTone[task.status]}>
                 <StatusIcon status={task.status} />
                 {statusLabel[task.status]}
-              </span>
+              </Badge>
             </div>
             <div className="aspect-video bg-background">
               <div className="studio-preview-bg grid h-full place-items-center">

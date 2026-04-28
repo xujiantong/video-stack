@@ -1,5 +1,6 @@
 import { KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function ApiSettingsPage() {
   return (
@@ -18,11 +19,7 @@ export function ApiSettingsPage() {
           {["API Key", "Secret Key", "服务区域", "默认模型"].map((label) => (
             <label className="grid gap-2 text-sm" key={label}>
               <span className="text-muted-foreground">{label}</span>
-              <input
-                className="h-10 rounded-button border border-border bg-input px-3 outline-none transition focus:border-primary"
-                placeholder={`请输入${label}`}
-                type={label.includes("Secret") ? "password" : "text"}
-              />
+              <Input placeholder={`请输入${label}`} type={label.includes("Secret") ? "password" : "text"} />
             </label>
           ))}
           <Button className="w-fit" type="button">

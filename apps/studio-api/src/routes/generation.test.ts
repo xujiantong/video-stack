@@ -76,7 +76,7 @@ describe("generation routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generations",
+      url: "/api/generation/tasks",
       payload: {
         ...baseRequest,
         assetRefs: [{ id: readyAssetId, kind: "image", label: "包装主图" }],
@@ -103,17 +103,17 @@ describe("generation routes", () => {
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json()).toEqual([expect.objectContaining({ id: created.id })]);
 
-    const detailResponse = await app.inject({ method: "GET", url: `/api/generations/${created.id}` });
+    const detailResponse = await app.inject({ method: "GET", url: `/api/generation/tasks/${created.id}` });
     expect(detailResponse.statusCode).toBe(200);
     expect(detailResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "queued" }));
 
-    const cancelResponse = await app.inject({ method: "POST", url: `/api/generations/${created.id}/cancel` });
+    const cancelResponse = await app.inject({ method: "POST", url: `/api/generation/tasks/${created.id}/cancel` });
     expect(cancelResponse.statusCode).toBe(200);
     expect(cancelResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "canceled" }));
 
-    const canonicalListResponse = await app.inject({ method: "GET", url: `/api/projects/${projectId}/generations` });
-    expect(canonicalListResponse.statusCode).toBe(200);
-    expect(canonicalListResponse.json()).toEqual([expect.objectContaining({ id: created.id, status: "canceled" })]);
+    const canceledListResponse = await app.inject({ method: "GET", url: `/api/generation/tasks?projectId=${projectId}` });
+    expect(canceledListResponse.statusCode).toBe(200);
+    expect(canceledListResponse.json()).toEqual([expect.objectContaining({ id: created.id, status: "canceled" })]);
   });
 
   it("returns a confirmation token and rejects high cost creation without it", async () => {
@@ -133,7 +133,7 @@ describe("generation routes", () => {
 
     const estimateResponse = await app.inject({
       method: "POST",
-      url: "/api/generations/estimate",
+      url: "/api/generation/estimate",
       payload: highCostRequest
     });
 
@@ -147,7 +147,7 @@ describe("generation routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generations",
+      url: "/api/generation/tasks",
       payload: highCostRequest
     });
 
@@ -175,12 +175,12 @@ describe("generation routes", () => {
         durationSeconds: 15
       }
     } as const;
-    const estimate = await app.inject({ method: "POST", url: "/api/generations/estimate", payload: highCostRequest });
+    const estimate = await app.inject({ method: "POST", url: "/api/generation/estimate", payload: highCostRequest });
     const secondConfirmToken = estimate.json().secondConfirmToken;
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generations",
+      url: "/api/generation/tasks",
       payload: { ...highCostRequest, secondConfirmToken }
     });
 
@@ -190,7 +190,7 @@ describe("generation routes", () => {
 
     const regenerateResponse = await app.inject({
       method: "POST",
-      url: `/api/generations/${created.id}/regenerate`,
+      url: `/api/generation/tasks/${created.id}/regenerate`,
       payload: { ...highCostRequest, secondConfirmToken }
     });
 

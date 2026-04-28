@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { DEFAULT_MODEL_CAPABILITIES } from "@video-stack/shared";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
 const defaultParameters = {
@@ -46,6 +47,53 @@ function makeTask(input: Partial<E2eTask> & Pick<E2eTask, "id" | "promptText" | 
     ...input
   };
 }
+
+test.beforeEach(async ({ page }) => {
+  const defaultTasks = [
+    makeTask({
+      id: "00000000-0000-4000-8000-000000000201",
+      promptText: "生成 8 秒产品展示视频",
+      status: "succeeded"
+    }),
+    makeTask({
+      id: "00000000-0000-4000-8000-000000000202",
+      promptText: "把镜头改成俯拍，增加字幕",
+      status: "running",
+      estimatedCostCents: 1120
+    }),
+    makeTask({
+      id: "00000000-0000-4000-8000-000000000203",
+      promptText: "使用 @包装主图 展示产品旋转，镜头从微距拉到全景。",
+      status: "queued",
+      estimatedCostCents: 1480
+    }),
+    makeTask({
+      id: "00000000-0000-4000-8000-000000000204",
+      promptText: "当前模型不支持音频参考，请移除 @旁白音色 或切换模型。",
+      status: "failed",
+      estimatedCostCents: 980,
+      errorMessage: "当前模型不支持音频参考，请移除音频或切换模型。"
+    })
+  ];
+
+  await page.route("**/api/models", async (route) => {
+    await route.fulfill({ contentType: "application/json", json: DEFAULT_MODEL_CAPABILITIES });
+  });
+  await page.route("**/api/generation/tasks**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/generation/tasks") {
+      await route.fulfill({ contentType: "application/json", json: defaultTasks });
+      return;
+    }
+    if (request.method() === "GET" && url.pathname.includes("/api/generation/tasks/")) {
+      const taskId = url.pathname.split("/").at(-1);
+      await route.fulfill({ contentType: "application/json", json: defaultTasks.find((task) => task.id === taskId) ?? defaultTasks[0] });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", json: { error: { code: "NOT_FOUND", message: "测试未配置该请求。" } }, status: 404 });
+  });
+});
 
 async function mockGenerationRoutes(page: Page, seedTasks: E2eTask[] = []) {
   const tasks = [...seedTasks];

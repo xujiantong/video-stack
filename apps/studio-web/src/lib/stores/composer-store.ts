@@ -16,10 +16,13 @@ export type StudioAsset = AssetMention & {
 type ComposerState = {
   view: StudioView;
   prompt: string;
+  promptDoc: Record<string, unknown>;
+  assetRefs: AssetMention[];
   assets: StudioAsset[];
   tasks: GenerationTask[];
   setView(view: StudioView): void;
   setPrompt(prompt: string): void;
+  setPromptDoc(promptDoc: Record<string, unknown>, assetRefs: AssetMention[], promptText: string): void;
   upsertAsset(asset: StudioAsset): void;
   setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
   removeAsset(assetId: string): void;
@@ -31,6 +34,8 @@ const now = new Date().toISOString();
 export const useComposerStore = create<ComposerState>((set) => ({
   view: "generate",
   prompt: "生成 8 秒产品展示视频，突出包装细节和柔和灯光。",
+  promptDoc: { type: "doc", content: [{ type: "text", text: "生成 8 秒产品展示视频，突出包装细节和柔和灯光。" }] },
+  assetRefs: [],
   assets: [
     {
       id: "00000000-0000-4000-8000-000000000101",
@@ -130,6 +135,9 @@ export const useComposerStore = create<ComposerState>((set) => ({
   },
   setPrompt(prompt) {
     set({ prompt });
+  },
+  setPromptDoc(promptDoc, assetRefs, promptText) {
+    set({ promptDoc, assetRefs, prompt: promptText });
   },
   upsertAsset(asset) {
     set((state) => {

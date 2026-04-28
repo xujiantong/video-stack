@@ -8,7 +8,8 @@ import { useComposerStore } from "@/lib/stores/composer-store";
 const projectId = "00000000-0000-4000-8000-000000000001";
 const credentialId = "00000000-0000-4000-8000-000000000401";
 
-async function estimateGeneration(promptText: string): Promise<EstimateGenerationResponse> {
+async function estimateGeneration(input: { promptText: string; assetRefs: unknown[] }): Promise<EstimateGenerationResponse> {
+  const { promptText, assetRefs } = input;
   const fallback = {
     estimatedCostCents: Math.max(300, promptText.length * 2),
     estimatedSeconds: 45,
@@ -19,7 +20,7 @@ async function estimateGeneration(promptText: string): Promise<EstimateGeneratio
     const response = await fetch("/api/generation/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, promptText, assetRefs: [], provider: "jimeng" })
+      body: JSON.stringify({ projectId, promptText, assetRefs, provider: "jimeng" })
     });
     if (!response.ok) return fallback;
     return (await response.json()) as EstimateGenerationResponse;
@@ -30,8 +31,10 @@ async function estimateGeneration(promptText: string): Promise<EstimateGeneratio
 
 export function GenerationComposer() {
   const prompt = useComposerStore((state) => state.prompt);
+  const promptDoc = useComposerStore((state) => state.promptDoc);
+  const assetRefs = useComposerStore((state) => state.assetRefs);
   const assets = useComposerStore((state) => state.assets);
-  const setPrompt = useComposerStore((state) => state.setPrompt);
+  const setPromptDoc = useComposerStore((state) => state.setPromptDoc);
   const addTask = useComposerStore((state) => state.addTask);
 
   const estimateMutation = useMutation({
@@ -45,8 +48,9 @@ export function GenerationComposer() {
         id: crypto.randomUUID(),
         projectId,
         provider: "jimeng",
+        promptDoc,
         promptText: prompt,
-        assetRefs: assets,
+        assetRefs,
         status: "queued",
         estimatedCostCents: estimateMutation.data?.estimatedCostCents ?? Math.max(300, prompt.length * 2),
         actualCostCents: null,
@@ -70,7 +74,7 @@ export function GenerationComposer() {
     <div className="px-4 py-3">
       <div className="mx-auto grid max-w-6xl gap-4 rounded-composer border border-border bg-surface-raised p-4 shadow-composer lg:grid-cols-[1fr_280px]">
         <div className="min-w-0">
-          <PromptEditor assets={assets} prompt={prompt} onPromptChange={setPrompt} />
+          <PromptEditor assets={assets} assetRefs={assetRefs} prompt={prompt} promptDoc={promptDoc} onPromptDocChange={setPromptDoc} />
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             {["视频生成", "Seedance 2.0", "全能参考", "16:9", "1080P", "15s"].map((item) => (
               <Button
@@ -122,7 +126,7 @@ export function GenerationComposer() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => estimateMutation.mutate(prompt)}
+              onClick={() => estimateMutation.mutate({ promptText: prompt, assetRefs })}
               disabled={prompt.trim().length === 0 || estimateMutation.isPending}
             >
               <Calculator className="size-4" aria-hidden="true" />

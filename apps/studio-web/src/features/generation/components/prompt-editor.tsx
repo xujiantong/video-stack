@@ -66,12 +66,14 @@ export function PromptEditor({
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [mentionQuery, setMentionQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const menuId = "prompt-asset-menu";
 
   const menuAssets = useMemo(() => {
     const q = mentionQuery.trim().toLowerCase();
     const list = q.length === 0 ? assets : assets.filter((asset) => asset.label.toLowerCase().includes(q));
     return list.slice(0, 8);
   }, [assets, mentionQuery]);
+  const activeOptionId = mentionOpen && menuAssets[activeIndex] ? `${menuId}-${menuAssets[activeIndex].id}` : undefined;
 
   function closeMentionMenu() {
     setMentionOpen(false);
@@ -125,7 +127,7 @@ export function PromptEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <label className="text-xs font-medium uppercase text-muted-foreground" htmlFor="prompt-editor">
           Prompt
@@ -138,7 +140,7 @@ export function PromptEditor({
           return (
             <Button
               aria-label={`引用${asset.label}`}
-              className="size-12 px-0 text-muted-foreground hover:text-primary"
+              className="size-10 px-0 text-muted-foreground hover:text-primary"
               key={asset.id}
               title={asset.label}
               type="button"
@@ -155,6 +157,10 @@ export function PromptEditor({
           ref={textareaRef}
           id="prompt-editor"
           aria-label="Prompt"
+          aria-activedescendant={activeOptionId}
+          aria-controls={mentionOpen ? menuId : undefined}
+          aria-expanded={mentionOpen}
+          aria-haspopup="listbox"
           value={prompt}
           onChange={(event) => handleChange(event.target.value)}
           onKeyDown={(event) => {
@@ -181,22 +187,26 @@ export function PromptEditor({
             }
           }}
           placeholder="描述镜头、节奏、字幕和素材引用，例如 @包装主图 微距旋转，柔和灯光。"
-          className="max-h-[34vh] min-h-24"
+          className="max-h-[20vh] min-h-20"
         />
         {mentionOpen ? (
           <div
+            id={menuId}
             className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-popover border border-border bg-surface-raised shadow-popover"
             role="listbox"
             aria-label="资产菜单"
           >
             {menuAssets.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">没有匹配的资产。</div>
+              <div aria-disabled="true" className="px-3 py-2 text-sm text-muted-foreground" role="option">
+                没有匹配的资产，请先上传参考内容。
+              </div>
             ) : (
               menuAssets.map((asset, index) => {
                 const active = index === activeIndex;
                 return (
                   <button
                     key={asset.id}
+                    id={`${menuId}-${asset.id}`}
                     type="button"
                     role="option"
                     aria-selected={active}

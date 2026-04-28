@@ -83,11 +83,11 @@ export function GenerationComposer() {
   }
 
   return (
-    <div className="px-4 py-3">
-      <div className="mx-auto grid max-w-6xl gap-4 rounded-composer border border-border bg-surface-raised p-4 shadow-composer lg:grid-cols-[1fr_280px]">
+    <div className="px-4 py-2">
+      <div className="mx-auto grid max-w-6xl gap-3 rounded-composer border border-border bg-surface-raised p-3 shadow-composer lg:grid-cols-[1fr_270px]">
         <div className="min-w-0">
           <PromptEditor assets={assets} assetRefs={assetRefs} prompt={prompt} promptDoc={promptDoc} onPromptDocChange={setPromptDoc} />
-          <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-border pt-3">
+          <div className="mt-2 flex flex-wrap items-start gap-2 border-t border-border pt-2">
             {models.length > 0 ? <ModelParameterToolbar models={models} parameters={parameters} onParametersChange={setParameters} /> : null}
             <Button
               aria-label="打开资产引用菜单"
@@ -100,25 +100,25 @@ export function GenerationComposer() {
             </Button>
           </div>
         </div>
-        <div className="relative flex flex-col justify-between gap-3">
-          <div className="rounded-card border border-border bg-background/60 p-3">
+        <div className="relative flex flex-col justify-between gap-2">
+          <div className="rounded-card border border-border bg-background/60 p-2.5">
             <p className="text-xs font-medium uppercase text-muted-foreground">预计费用</p>
-            <p className="mt-2 text-2xl font-semibold text-warning">¥{(costCents / 100).toFixed(2)}</p>
+            <p className="mt-1 text-xl font-semibold text-warning">¥{(costCents / 100).toFixed(2)}</p>
             <p className="mt-1 text-xs text-muted-foreground">预计等待 {estimatedSeconds} 秒</p>
             {showSecondConfirm ? (
-              <p className="mt-2 flex items-start gap-2 text-sm leading-5 text-warning">
+              <p className="mt-1.5 flex items-start gap-2 text-sm leading-5 text-warning">
                 <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 本次费用较高，请确认后生成。
               </p>
             ) : (
-              <p className="mt-2 text-sm text-muted-foreground">费用按模型、分辨率和时长估算。</p>
+              <p className="mt-1.5 text-sm text-muted-foreground">费用按模型、分辨率和时长估算。</p>
             )}
           </div>
           <div className="rounded-popover border border-border bg-background/80 p-2 shadow-popover">
-            <p className="mb-2 text-xs text-muted-foreground">可能 @ 的内容</p>
+            <p className="mb-1.5 text-xs text-muted-foreground">可能 @ 的内容</p>
             {assets.map((asset) => (
-              <Button className="h-auto w-full justify-start px-2 py-2 text-xs" key={asset.id} type="button" variant="ghost">
-                <span className="grid size-7 place-items-center rounded-button bg-muted text-primary">
+              <Button className="h-auto w-full justify-start px-2 py-1.5 text-xs" key={asset.id} type="button" variant="ghost">
+                <span className="grid size-6 place-items-center rounded-button bg-muted text-primary">
                   <Upload className="size-3" aria-hidden="true" />
                 </span>
                 <span>@{asset.label}</span>

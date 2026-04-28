@@ -17,6 +17,11 @@ type CredentialFormState = {
   serviceRegion: string;
 };
 
+type SettingsMessage = {
+  tone: "status" | "error";
+  text: string;
+};
+
 const initialFormState: CredentialFormState = {
   apiKey: "",
   defaultModelId: "",
@@ -27,7 +32,7 @@ const initialFormState: CredentialFormState = {
 
 export function ApiSettingsPage() {
   const [form, setForm] = useState<CredentialFormState>(initialFormState);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<SettingsMessage | null>(null);
   const queryClient = useQueryClient();
   const credentialsQuery = useQuery({
     queryKey: credentialsQueryKey,
@@ -39,30 +44,30 @@ export function ApiSettingsPage() {
     mutationFn: saveCredential,
     async onSuccess() {
       setForm(initialFormState);
-      setMessage("凭证已保存。前端已清空 API Key 和 Secret Key。");
+      setMessage({ tone: "status", text: "凭证已保存。前端已清空 API Key 和 Secret Key。" });
       await queryClient.invalidateQueries({ queryKey: credentialsQueryKey });
     },
     onError(error) {
-      setMessage(error instanceof Error ? error.message : "保存凭证失败，请检查字段后重试。");
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "保存凭证失败，请检查字段后重试。" });
     }
   });
   const testMutation = useMutation({
     mutationFn: testCredential,
     onSuccess(result) {
-      setMessage(result.message);
+      setMessage({ tone: result.ok ? "status" : "error", text: result.message });
     },
     onError(error) {
-      setMessage(error instanceof Error ? error.message : "检测凭证失败，请重新保存后再试。");
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "检测凭证失败，请重新保存后再试。" });
     }
   });
   const deleteMutation = useMutation({
     mutationFn: deleteCredential,
     async onSuccess() {
-      setMessage("凭证已删除，请重新保存后再生成视频。");
+      setMessage({ tone: "status", text: "凭证已删除，请重新保存后再生成视频。" });
       await queryClient.invalidateQueries({ queryKey: credentialsQueryKey });
     },
     onError(error) {
-      setMessage(error instanceof Error ? error.message : "删除凭证失败，请刷新后重试。");
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "删除凭证失败，请刷新后重试。" });
     }
   });
 
@@ -141,7 +146,16 @@ export function ApiSettingsPage() {
               检测连接
             </Button>
           </div>
-          {message ? <p className="rounded-card border border-border bg-muted p-3 text-sm text-foreground">{message}</p> : null}
+          {message ? (
+            <p
+              className={`rounded-card border p-3 text-sm ${
+                message.tone === "error" ? "border-danger/40 bg-danger/10 text-foreground" : "border-border bg-muted text-foreground"
+              }`}
+              role={message.tone === "error" ? "alert" : "status"}
+            >
+              {message.text}
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -180,7 +194,9 @@ export function ApiSettingsPage() {
               </div>
             ))
           ) : (
-            <p className="rounded-card border border-border bg-muted p-3 text-sm text-muted-foreground">暂无凭证，请先保存 API Key 和 Secret Key。</p>
+            <p className="rounded-card border border-border bg-muted p-3 text-sm text-muted-foreground" role="status">
+              暂无凭证，请先保存 API Key 和 Secret Key。
+            </p>
           )}
         </div>
       </section>

@@ -57,7 +57,7 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
             <div className="max-w-md px-6 text-center">
               <ShieldAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
               <p className="mt-3 text-sm font-medium text-danger">生成失败</p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.errorMessage ?? "生成失败，请稍后重试或查看详情。"}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.errorMessage ? `${task.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。"}</p>
             </div>
           ) : (
             <div className="text-center">

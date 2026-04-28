@@ -108,7 +108,11 @@ function TaskHistoryCard({
           <span>{parameters?.resolution.toUpperCase() ?? "1080P"}</span>
           <span>{parameters ? `${parameters.durationSeconds}s` : "15s"}</span>
         </div>
-        {failureMessage ? <p className="rounded-card bg-danger/10 p-2 text-xs leading-5 text-danger">{failureMessage}</p> : null}
+        {failureMessage ? (
+          <p className="rounded-card border border-danger/30 bg-danger/10 p-2 text-xs leading-5 text-danger" role="alert">
+            {failureMessage}
+          </p>
+        ) : null}
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-warning">¥{(currentTask.estimatedCostCents / 100).toFixed(2)}</span>
           <div className="flex gap-2">
@@ -160,9 +164,21 @@ export function TaskHistoryStreamView({
   return (
     <div className={cn("space-y-3", className ?? "mx-auto max-w-6xl p-4 pb-28")}>
       {tasksQuery.isError ? (
-        <p className="rounded-card border border-danger/40 bg-danger/10 p-3 text-sm text-danger">读取任务列表失败，请刷新后重试。</p>
+        <p className="rounded-card border border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
+          读取任务列表失败，请刷新后重试。
+        </p>
       ) : null}
-      {tasksQuery.isPending ? <p className="text-sm text-muted-foreground">正在读取任务列表...</p> : null}
+      {tasksQuery.isPending ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          正在读取任务列表...
+        </p>
+      ) : null}
+      {!tasksQuery.isPending && !tasksQuery.isError && tasks.length === 0 ? (
+        <div className="rounded-card border border-border bg-surface p-4 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">暂无任务</p>
+          <p className="mt-1">生成任务后，历史流会显示状态、费用和下一步操作。</p>
+        </div>
+      ) : null}
       <div className={cn("grid gap-2", compact ? "grid-cols-1" : "md:grid-cols-2")}>
         {tasks.map((task) => (
           <TaskHistoryCard

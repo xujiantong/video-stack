@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Calculator, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
-import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
+import type { AssetMention, EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
 import { ModelParameterToolbar } from "./model-parameter-toolbar";
-import { PromptEditor } from "./prompt-editor";
+import { buildPromptDoc, PromptEditor } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createGenerationTask, estimateGeneration, generationTaskKey, generationTasksKey, listGenerationModels } from "@/lib/api/generation-api";
@@ -82,6 +82,13 @@ export function GenerationComposer() {
     createMutation.mutate({ estimate: confirmEstimate, secondConfirmToken: confirmEstimate.secondConfirmToken });
   }
 
+  function appendAssetReference(asset: AssetMention) {
+    const separator = prompt.trim().length === 0 || /\s$/.test(prompt) ? "" : " ";
+    const nextPrompt = `${prompt}${separator}@${asset.label} `;
+    const built = buildPromptDoc(nextPrompt, assets);
+    setPromptDoc(built.promptDoc, built.assetRefs, nextPrompt);
+  }
+
   return (
     <div className="px-4 py-2">
       <div className="mx-auto grid max-w-6xl gap-3 rounded-composer border border-border bg-surface-raised p-3 shadow-composer lg:grid-cols-[1fr_270px]">
@@ -90,8 +97,13 @@ export function GenerationComposer() {
           <div className="mt-2 flex flex-wrap items-start gap-2 border-t border-border pt-2">
             {models.length > 0 ? <ModelParameterToolbar models={models} parameters={parameters} onParametersChange={setParameters} /> : null}
             <Button
-              aria-label="打开资产引用菜单"
+              aria-label="引用第一个资产"
               className="h-8 px-3 text-xs text-primary"
+              disabled={assets.length === 0}
+              onClick={() => {
+                const firstAsset = assets[0];
+                if (firstAsset) appendAssetReference(firstAsset);
+              }}
               type="button"
               variant="secondary"
             >
@@ -118,7 +130,14 @@ export function GenerationComposer() {
             <p className="mb-1.5 text-xs text-muted-foreground">可能 @ 的内容</p>
             {assets.length === 0 ? <p className="px-2 py-1.5 text-xs text-muted-foreground">暂无可引用内容，请先上传参考内容。</p> : null}
             {assets.map((asset) => (
-              <Button aria-label={`引用${asset.label}`} className="h-auto w-full justify-start px-2 py-1.5 text-xs" key={asset.id} type="button" variant="ghost">
+              <Button
+                aria-label={`引用${asset.label}`}
+                className="h-auto w-full justify-start px-2 py-1.5 text-xs"
+                key={asset.id}
+                onClick={() => appendAssetReference(asset)}
+                type="button"
+                variant="ghost"
+              >
                 <span className="grid size-6 place-items-center rounded-button bg-muted text-primary">
                   <Upload className="size-3" aria-hidden="true" />
                 </span>

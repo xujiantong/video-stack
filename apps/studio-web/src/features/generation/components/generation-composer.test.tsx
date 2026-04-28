@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { GenerationComposer } from "./generation-composer";
+import { buildPromptDoc } from "./prompt-editor";
 
 function renderComposer() {
   const queryClient = new QueryClient();
@@ -15,6 +16,22 @@ function renderComposer() {
 afterEach(() => cleanup());
 
 describe("GenerationComposer", () => {
+  it("inserts a sidebar asset reference into the prompt", async () => {
+    renderComposer();
+
+    fireEvent.click(await screen.findByRole("button", { name: "引用包装主图" }));
+
+    expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Prompt" }).value).toContain("@包装主图");
+  });
+
+  it("keeps repeated asset mentions unique in the payload references", () => {
+    const built = buildPromptDoc("@包装主图 拉近，随后再次使用 @包装主图。", [
+      { id: "00000000-0000-4000-8000-000000000101", kind: "image", label: "包装主图" }
+    ]);
+
+    expect(built.assetRefs).toEqual([{ id: "00000000-0000-4000-8000-000000000101", kind: "image", label: "包装主图" }]);
+  });
+
   it("estimates cost and creates a queued task", async () => {
     renderComposer();
 

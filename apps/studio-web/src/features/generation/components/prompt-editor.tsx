@@ -10,12 +10,13 @@ type PromptInlineNode =
   | { type: "text"; text: string }
   | { type: "asset"; assetId: string; label: string; kind: AssetMention["kind"] };
 
-function buildPromptDoc(promptText: string, assets: AssetMention[]): { promptDoc: Record<string, unknown>; assetRefs: AssetMention[] } {
+export function buildPromptDoc(promptText: string, assets: AssetMention[]): { promptDoc: Record<string, unknown>; assetRefs: AssetMention[] } {
   if (assets.length === 0) return { promptDoc: { type: "doc", content: [{ type: "text", text: promptText }] }, assetRefs: [] };
 
   const labelsByLength = [...assets].sort((a, b) => b.label.length - a.label.length);
   const nodes: PromptInlineNode[] = [];
   const assetRefs: AssetMention[] = [];
+  const seenAssetIds = new Set<string>();
 
   let cursor = 0;
   while (cursor < promptText.length) {
@@ -38,7 +39,10 @@ function buildPromptDoc(promptText: string, assets: AssetMention[]): { promptDoc
     }
 
     nodes.push({ type: "asset", assetId: match.id, label: match.label, kind: match.kind });
-    assetRefs.push({ id: match.id, kind: match.kind, label: match.label });
+    if (!seenAssetIds.has(match.id)) {
+      assetRefs.push({ id: match.id, kind: match.kind, label: match.label });
+      seenAssetIds.add(match.id);
+    }
     cursor = atIndex + 1 + match.label.length;
   }
 

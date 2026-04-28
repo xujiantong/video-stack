@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Copy, Film, Maximize2, PenLine, Play, RefreshCcw, ShieldAlert } from "lucide-react";
 import { DEFAULT_GENERATION_PARAMETERS, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
@@ -25,11 +25,13 @@ function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
 }
 
 function PreviewStage({
+  onCopyParameters,
   onEdit,
   onRegenerate,
   regeneratePending,
   task
 }: {
+  onCopyParameters(task: GenerationTask): void;
   onEdit(task: GenerationTask): void;
   onRegenerate(task: GenerationTask): void;
   regeneratePending: boolean;
@@ -128,7 +130,7 @@ function PreviewStage({
             <PenLine className="size-4" aria-hidden="true" />
             重新编辑
           </Button>
-          <Button type="button" variant="secondary">
+          <Button type="button" variant="secondary" onClick={() => onCopyParameters(task)}>
             <Copy className="size-4" aria-hidden="true" />
             复制参数
           </Button>
@@ -157,7 +159,7 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
     refetchInterval: (query) => (hasActiveTasks(query.state.data) ? taskPollIntervalMs : false),
     refetchIntervalInBackground: true
   });
-  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+  const tasks = tasksQuery.data ?? [];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
   const regenerateMutation = useMutation({
     mutationFn: async ({ estimate, task }: { estimate: EstimateGenerationResponse; task: GenerationTask }) =>
@@ -198,6 +200,11 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
     if (task.parameters) setParameters(task.parameters);
   }
 
+  function copyTaskParameters(task: GenerationTask) {
+    const parameters = task.parameters ? JSON.stringify(task.parameters, null, 2) : "当前任务没有参数快照。";
+    void navigator.clipboard?.writeText(parameters);
+  }
+
   function confirmAgain() {
     if (!confirmRegenerate?.estimate.secondConfirmToken) return;
     regenerateMutation.mutate(confirmRegenerate);
@@ -223,7 +230,13 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
           selectedTaskId={selectedTask?.id}
         />
       </aside>
-      <PreviewStage onEdit={editTask} onRegenerate={(task) => estimateMutation.mutate(task)} regeneratePending={estimateMutation.isPending || regenerateMutation.isPending} task={selectedTask} />
+      <PreviewStage
+        onCopyParameters={copyTaskParameters}
+        onEdit={editTask}
+        onRegenerate={(task) => estimateMutation.mutate(task)}
+        regeneratePending={estimateMutation.isPending || regenerateMutation.isPending}
+        task={selectedTask}
+      />
       <Dialog open={confirmRegenerate !== null} title="确认再次生成" onOpenChange={(open) => !open && setConfirmRegenerate(null)}>
         <DialogHeader>
           <div>

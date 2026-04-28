@@ -20,5 +20,5 @@ export const statusLabel: Record<GenerationTask["status"], string> = {
 };
 
 export function StatusBadge({ status }: { status: GenerationTask["status"] }) {
-  return <span className={cn("w-fit rounded-md border px-2 py-1 text-xs", statusClass[status])}>{statusLabel[status]}</span>;
+  return <span className={cn("w-fit rounded-button border px-2 py-1 text-xs", statusClass[status])}>{statusLabel[status]}</span>;
 }

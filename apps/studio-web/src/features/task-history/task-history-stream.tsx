@@ -23,22 +23,22 @@ export function TaskHistoryStream({ tasks }: { tasks: GenerationTask[] }) {
     <div className="mx-auto max-w-6xl space-y-3 p-4 pb-28">
       <div className="grid gap-2 md:grid-cols-2">
         {tasks.map((task) => (
-          <article className="overflow-hidden rounded-md border border-border bg-surface" key={task.id}>
+          <article className="overflow-hidden rounded-card border border-border bg-surface" key={task.id}>
             <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-3">
               <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                 <span className="flex -space-x-2">
-                  <span className="grid size-7 place-items-center rounded-md border border-border bg-muted text-[10px]">图1</span>
-                  <span className="grid size-7 place-items-center rounded-md border border-border bg-muted text-[10px]">音1</span>
+                  <span className="grid size-7 place-items-center rounded-button border border-border bg-muted text-[10px]">图1</span>
+                  <span className="grid size-7 place-items-center rounded-button border border-border bg-muted text-[10px]">音1</span>
                 </span>
                 <span className="line-clamp-1">{task.promptText}</span>
               </div>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-button border border-border bg-muted px-2 py-1 text-xs">
                 <StatusIcon status={task.status} />
                 {statusLabel[task.status]}
               </span>
             </div>
             <div className="aspect-video bg-background">
-              <div className="grid h-full place-items-center bg-[linear-gradient(135deg,hsl(220_14%_12%),hsl(220_18%_5%))]">
+              <div className="studio-preview-bg grid h-full place-items-center">
                 {task.status === "succeeded" ? (
                   <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
                     <Play className="size-5 fill-current" aria-hidden="true" />
@@ -55,7 +55,7 @@ export function TaskHistoryStream({ tasks }: { tasks: GenerationTask[] }) {
                 <span>1080P</span>
                 <span>15s</span>
               </div>
-              {task.errorMessage ? <p className="rounded-md bg-danger/10 p-2 text-xs leading-5 text-danger">{task.errorMessage}</p> : null}
+              {task.errorMessage ? <p className="rounded-card bg-danger/10 p-2 text-xs leading-5 text-danger">{task.errorMessage}</p> : null}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-warning">¥{(task.estimatedCostCents / 100).toFixed(2)}</span>
                 <div className="flex gap-2">

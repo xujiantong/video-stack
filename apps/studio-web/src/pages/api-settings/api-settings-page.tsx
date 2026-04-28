@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 export function ApiSettingsPage() {
   return (
     <div className="mx-auto max-w-3xl p-4 pb-28">
-      <section className="rounded-md border border-border bg-surface p-5">
+      <section className="rounded-card border border-border bg-surface p-5">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-md bg-primary/10 text-primary">
+          <span className="grid size-10 place-items-center rounded-card bg-primary/10 text-primary">
             <KeyRound className="size-5" aria-hidden="true" />
           </span>
           <div>
@@ -19,7 +19,7 @@ export function ApiSettingsPage() {
             <label className="grid gap-2 text-sm" key={label}>
               <span className="text-muted-foreground">{label}</span>
               <input
-                className="h-10 rounded-md border border-border bg-input px-3 outline-none transition focus:border-primary"
+                className="h-10 rounded-button border border-border bg-input px-3 outline-none transition focus:border-primary"
                 placeholder={`请输入${label}`}
                 type={label.includes("Secret") ? "password" : "text"}
               />

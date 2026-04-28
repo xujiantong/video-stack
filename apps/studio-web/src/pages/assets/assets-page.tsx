@@ -13,11 +13,11 @@ export function AssetsPage() {
     <div className="grid min-h-full grid-cols-1 gap-4 p-4 pb-28 xl:grid-cols-[1fr_360px]">
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex rounded-md border border-border bg-muted p-1">
-            <button className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" type="button">
+          <div className="inline-flex rounded-button border border-border bg-muted p-1">
+            <button className="rounded-button bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" type="button">
               资产库
             </button>
-            <button className="rounded-md px-3 py-1.5 text-sm text-muted-foreground" type="button">
+            <button className="rounded-button px-3 py-1.5 text-sm text-muted-foreground" type="button">
               任务列表
             </button>
           </div>
@@ -27,7 +27,7 @@ export function AssetsPage() {
           </Button>
         </div>
 
-        <section className="overflow-hidden rounded-md border border-border bg-surface">
+        <section className="overflow-hidden rounded-card border border-border bg-surface">
           <div className="grid grid-cols-[64px_1.2fr_0.7fr_0.7fr_0.7fr_1fr_96px] border-b border-border px-3 py-2 text-xs text-muted-foreground">
             <span>缩略图</span>
             <span>名称</span>
@@ -60,7 +60,7 @@ export function AssetsPage() {
           ))}
         </section>
 
-        <section className="overflow-hidden rounded-md border border-border bg-surface">
+        <section className="overflow-hidden rounded-card border border-border bg-surface">
           <div className="grid grid-cols-[1.5fr_0.8fr_0.7fr_0.6fr_0.8fr_180px] border-b border-border px-3 py-2 text-xs text-muted-foreground">
             <span>提示词摘要</span>
             <span>模型</span>
@@ -98,35 +98,35 @@ export function AssetsPage() {
         </section>
       </div>
 
-      <aside className="rounded-md border border-border bg-surface p-4">
+      <aside className="rounded-card border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">任务详情</h2>
           <Button aria-label="关闭详情" className="size-8 px-0" type="button" variant="ghost">
             <PanelRightClose className="size-4" aria-hidden="true" />
           </Button>
         </div>
-        <div className="mt-4 aspect-video rounded-md border border-border bg-background">
+        <div className="mt-4 aspect-video rounded-card border border-border bg-background">
           <div className="grid h-full place-items-center text-muted-foreground">
             <Film className="size-8" aria-hidden="true" />
           </div>
         </div>
         <div className="mt-4 space-y-4 text-sm">
           <section>
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">原始提示词</p>
-            <p className="rounded-md bg-muted p-3 leading-6">{selectedTask?.promptText}</p>
+            <p className="mb-2 text-xs uppercase text-muted-foreground">原始提示词</p>
+            <p className="rounded-card bg-muted p-3 leading-6">{selectedTask?.promptText}</p>
           </section>
           <section>
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">参数快照</p>
+            <p className="mb-2 text-xs uppercase text-muted-foreground">参数快照</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               {["Seedance 2.0", "全能参考", "16:9", "1080P", "15s", "¥8.60"].map((item) => (
-                <span className="rounded-md border border-border bg-muted px-2 py-2" key={item}>
+                <span className="rounded-button border border-border bg-muted px-2 py-2" key={item}>
                   {item}
                 </span>
               ))}
             </div>
           </section>
           <section>
-            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">引用资产</p>
+            <p className="mb-2 text-xs uppercase text-muted-foreground">引用资产</p>
             <div className="flex gap-2">
               {assets.map((asset) => (
                 <AssetIcon asset={asset} key={asset.id} />

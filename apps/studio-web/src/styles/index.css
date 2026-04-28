@@ -2,23 +2,26 @@
 @import "tw-animate-css";
 
 :root {
-  --background: hsl(220 18% 6%);
-  --foreground: hsl(210 22% 92%);
-  --card: hsl(220 16% 9%);
-  --card-foreground: hsl(210 22% 92%);
-  --surface: hsl(220 15% 8%);
-  --surface-raised: hsl(220 14% 12%);
-  --border: hsl(220 13% 18%);
-  --muted: hsl(220 12% 14%);
-  --muted-foreground: hsl(218 10% 62%);
-  --primary: hsl(183 78% 52%);
-  --primary-foreground: hsl(220 18% 6%);
-  --accent: hsl(42 92% 58%);
+  --background: hsl(220 20% 5%);
+  --foreground: hsl(210 24% 94%);
+  --card: hsl(220 17% 8%);
+  --card-foreground: hsl(210 24% 94%);
+  --surface: hsl(220 16% 9%);
+  --surface-raised: hsl(220 14% 13%);
+  --border: hsl(220 12% 18%);
+  --muted: hsl(220 12% 15%);
+  --muted-foreground: hsl(218 10% 64%);
+  --primary: hsl(176 72% 46%);
+  --primary-foreground: hsl(220 20% 5%);
+  --accent: hsl(38 94% 57%);
   --danger: hsl(0 72% 58%);
-  --success: hsl(145 62% 46%);
-  --warning: hsl(36 92% 56%);
+  --success: hsl(145 58% 45%);
+  --warning: hsl(38 94% 57%);
   --input: hsl(220 14% 12%);
-  --ring: hsl(183 78% 52%);
+  --ring: hsl(176 72% 46%);
+  --preview-from: hsl(220 14% 13%);
+  --preview-to: hsl(220 20% 5%);
+  --scrollbar-thumb: hsl(220 12% 24%);
 }
 
 .dark {
@@ -43,6 +46,13 @@
   --color-warning: var(--warning);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --radius-button: 0.5rem;
+  --radius-card: 0.5rem;
+  --radius-popover: 0.75rem;
+  --radius-composer: 1.25rem;
+  --shadow-primary-ring: 0 0 0 1px hsl(176 72% 46% / 0.22);
+  --shadow-composer: 0 -18px 80px hsl(220 20% 3% / 0.48);
+  --shadow-popover: 0 18px 48px hsl(220 20% 3% / 0.42);
 }
 
 @layer base {
@@ -67,6 +77,7 @@
       system-ui,
       sans-serif;
     letter-spacing: 0;
+    text-rendering: optimizeLegibility;
   }
 
   button,
@@ -75,17 +86,30 @@
     font: inherit;
   }
 
+  button {
+    letter-spacing: 0;
+  }
+
   ::selection {
-    background-color: hsl(183 78% 52% / 0.28);
+    background-color: color-mix(in oklab, var(--primary) 28%, transparent);
   }
 }
 
 @utility studio-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: hsl(220 13% 24%) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 @utility studio-panel {
   border: 1px solid var(--border);
   background-color: var(--surface);
+}
+
+@utility studio-panel-raised {
+  border: 1px solid var(--border);
+  background-color: var(--surface-raised);
+}
+
+@utility studio-preview-bg {
+  background: linear-gradient(135deg, var(--preview-from), var(--preview-to));
 }

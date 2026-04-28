@@ -68,13 +68,13 @@ export function GenerationComposer() {
 
   return (
     <div className="px-4 py-3">
-      <div className="mx-auto grid max-w-6xl gap-4 rounded-[20px] border border-border bg-surface-raised p-4 shadow-[0_-18px_80px_hsl(220_18%_3%/0.48)] lg:grid-cols-[1fr_280px]">
+      <div className="mx-auto grid max-w-6xl gap-4 rounded-composer border border-border bg-surface-raised p-4 shadow-composer lg:grid-cols-[1fr_280px]">
         <div className="min-w-0">
           <PromptEditor assets={assets} prompt={prompt} onPromptChange={setPrompt} />
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
             {["视频生成", "Seedance 2.0", "全能参考", "16:9", "1080P", "15s"].map((item) => (
               <button
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted px-3 text-xs text-foreground transition hover:border-primary"
+                className="inline-flex h-8 items-center gap-1 rounded-button border border-border bg-muted px-3 text-xs text-foreground transition hover:border-primary"
                 key={item}
                 type="button"
               >
@@ -84,7 +84,7 @@ export function GenerationComposer() {
             ))}
             <button
               aria-label="打开资产引用菜单"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted px-3 text-xs text-primary transition hover:border-primary"
+              className="inline-flex h-8 items-center gap-1 rounded-button border border-border bg-muted px-3 text-xs text-primary transition hover:border-primary"
               type="button"
             >
               <AtSign className="size-3" aria-hidden="true" />
@@ -93,8 +93,8 @@ export function GenerationComposer() {
           </div>
         </div>
         <div className="relative flex flex-col justify-between gap-3">
-          <div className="rounded-md border border-border bg-background/60 p-3">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">预计费用</p>
+          <div className="rounded-card border border-border bg-background/60 p-3">
+            <p className="text-xs font-medium uppercase text-muted-foreground">预计费用</p>
             <p className="mt-2 text-2xl font-semibold text-warning">¥{(costCents / 100).toFixed(2)}</p>
             {showSecondConfirm ? (
               <p className="mt-2 flex items-start gap-2 text-sm leading-5 text-warning">
@@ -105,11 +105,11 @@ export function GenerationComposer() {
               <p className="mt-2 text-sm text-muted-foreground">费用按模型、分辨率和时长估算。</p>
             )}
           </div>
-          <div className="rounded-md border border-border bg-background/80 p-2">
+          <div className="rounded-popover border border-border bg-background/80 p-2 shadow-popover">
             <p className="mb-2 text-xs text-muted-foreground">可能 @ 的内容</p>
             {assets.map((asset) => (
-              <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted" key={asset.id} type="button">
-                <span className="grid size-7 place-items-center rounded-md bg-muted text-primary">
+              <button className="flex w-full items-center gap-2 rounded-button px-2 py-2 text-left text-xs hover:bg-muted" key={asset.id} type="button">
+                <span className="grid size-7 place-items-center rounded-button bg-muted text-primary">
                   <Upload className="size-3" aria-hidden="true" />
                 </span>
                 <span>@{asset.label}</span>

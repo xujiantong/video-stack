@@ -26,7 +26,7 @@ export function WorkbenchShell({
   return (
     <div className="grid h-screen grid-cols-1 bg-background text-foreground lg:grid-cols-[72px_1fr]">
       <aside className="hidden border-r border-border bg-card lg:flex lg:flex-col lg:items-center lg:gap-4 lg:py-4">
-        <div className="grid size-10 place-items-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+        <div className="grid size-10 place-items-center rounded-card border border-primary/30 bg-primary/10 text-primary">
           <Compass className="size-5" aria-hidden="true" />
         </div>
         <nav className="flex flex-1 flex-col items-center gap-2" aria-label="主导航">
@@ -37,7 +37,7 @@ export function WorkbenchShell({
               <button
                 aria-label={item.label}
                 className={cn(
-                  "group flex w-14 flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] text-muted-foreground transition",
+                  "group flex w-14 flex-col items-center gap-1 rounded-button px-2 py-2 text-[11px] text-muted-foreground transition",
                   "hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                   active && "bg-primary/10 text-primary"
                 )}

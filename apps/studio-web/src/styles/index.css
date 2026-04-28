@@ -6,6 +6,8 @@
   --foreground: hsl(210 22% 92%);
   --card: hsl(220 16% 9%);
   --card-foreground: hsl(210 22% 92%);
+  --surface: hsl(220 15% 8%);
+  --surface-raised: hsl(220 14% 12%);
   --border: hsl(220 13% 18%);
   --muted: hsl(220 12% 14%);
   --muted-foreground: hsl(218 10% 62%);
@@ -28,6 +30,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -62,6 +66,7 @@
       "Microsoft YaHei",
       system-ui,
       sans-serif;
+    letter-spacing: 0;
   }
 
   button,
@@ -69,4 +74,18 @@
   input {
     font: inherit;
   }
+
+  ::selection {
+    background-color: hsl(183 78% 52% / 0.28);
+  }
+}
+
+@utility studio-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(220 13% 24%) transparent;
+}
+
+@utility studio-panel {
+  border: 1px solid var(--border);
+  background-color: var(--surface);
 }

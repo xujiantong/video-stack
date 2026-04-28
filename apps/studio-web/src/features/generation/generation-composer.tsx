@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Calculator, SendHorizontal, ShieldAlert } from "lucide-react";
+import { AtSign, Calculator, ChevronDown, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
 import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
 import { PromptEditor } from "@/components/editor/prompt-editor";
 import { Button } from "@/components/ui/button";
@@ -63,46 +63,81 @@ export function GenerationComposer() {
   });
 
   const estimate = estimateMutation.data;
+  const costCents = estimate?.estimatedCostCents ?? Math.max(300, prompt.length * 2);
+  const showSecondConfirm = Boolean(estimate?.requiresSecondConfirm) || costCents >= 2_000;
 
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-[1fr_280px]">
-      <PromptEditor assets={assets} prompt={prompt} onPromptChange={setPrompt} />
-      <div className="flex flex-col justify-between gap-3 rounded-md border border-border bg-background/60 p-3">
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">费用</p>
-          <div className="rounded-md bg-muted p-3">
-            <p className="text-sm text-muted-foreground">预计费用</p>
-            <p className="mt-1 text-2xl font-semibold">
-              {estimate ? `¥${(estimate.estimatedCostCents / 100).toFixed(2)}` : "待预估"}
-            </p>
+    <div className="px-4 py-3">
+      <div className="mx-auto grid max-w-6xl gap-4 rounded-[20px] border border-border bg-surface-raised p-4 shadow-[0_-18px_80px_hsl(220_18%_3%/0.48)] lg:grid-cols-[1fr_280px]">
+        <div className="min-w-0">
+          <PromptEditor assets={assets} prompt={prompt} onPromptChange={setPrompt} />
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            {["视频生成", "Seedance 2.0", "全能参考", "16:9", "1080P", "15s"].map((item) => (
+              <button
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted px-3 text-xs text-foreground transition hover:border-primary"
+                key={item}
+                type="button"
+              >
+                {item}
+                <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
+              </button>
+            ))}
+            <button
+              aria-label="打开资产引用菜单"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted px-3 text-xs text-primary transition hover:border-primary"
+              type="button"
+            >
+              <AtSign className="size-3" aria-hidden="true" />
+              引用
+            </button>
           </div>
-          {estimate?.requiresSecondConfirm ? (
-            <p className="flex items-center gap-2 text-sm text-warning">
-              <ShieldAlert className="size-4" aria-hidden="true" />
-              本次费用较高，生成前需要确认。
-            </p>
-          ) : null}
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => estimateMutation.mutate(prompt)}
-            disabled={prompt.trim().length === 0 || estimateMutation.isPending}
-          >
-            <Calculator className="size-4" aria-hidden="true" />
-            预估费用
-          </Button>
-          <Button
-            type="button"
-            onClick={() => createMutation.mutate()}
-            disabled={prompt.trim().length === 0 || createMutation.isPending}
-          >
-            <SendHorizontal className="size-4" aria-hidden="true" />
-            生成
-          </Button>
+        <div className="relative flex flex-col justify-between gap-3">
+          <div className="rounded-md border border-border bg-background/60 p-3">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">预计费用</p>
+            <p className="mt-2 text-2xl font-semibold text-warning">¥{(costCents / 100).toFixed(2)}</p>
+            {showSecondConfirm ? (
+              <p className="mt-2 flex items-start gap-2 text-sm leading-5 text-warning">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                本次费用较高，请确认后生成。
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">费用按模型、分辨率和时长估算。</p>
+            )}
+          </div>
+          <div className="rounded-md border border-border bg-background/80 p-2">
+            <p className="mb-2 text-xs text-muted-foreground">可能 @ 的内容</p>
+            {assets.map((asset) => (
+              <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted" key={asset.id} type="button">
+                <span className="grid size-7 place-items-center rounded-md bg-muted text-primary">
+                  <Upload className="size-3" aria-hidden="true" />
+                </span>
+                <span>@{asset.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => estimateMutation.mutate(prompt)}
+              disabled={prompt.trim().length === 0 || estimateMutation.isPending}
+            >
+              <Calculator className="size-4" aria-hidden="true" />
+              预估费用
+            </Button>
+            <Button
+              type="button"
+              className="size-10 rounded-full px-0"
+              aria-label="生成"
+              onClick={() => createMutation.mutate()}
+              disabled={prompt.trim().length === 0 || createMutation.isPending}
+            >
+              <SendHorizontal className="-rotate-90 size-4" aria-hidden="true" />
+            </Button>
+          </div>
+          <span className="sr-only">{credentialId}</span>
         </div>
-        <span className="sr-only">{credentialId}</span>
       </div>
     </div>
   );

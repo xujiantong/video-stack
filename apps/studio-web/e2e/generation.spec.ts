@@ -20,6 +20,37 @@ test("user can switch asset and task tables", async ({ page }) => {
   await expect(page.getByRole("button", { name: "复制参数" }).first()).toBeVisible();
 });
 
+test("user can search, filter, inspect, and delete assets and tasks", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { exact: true, name: "资产" }).click();
+
+  await page.getByPlaceholder("搜索资产或任务").fill("旁白");
+  await expect(page.getByRole("cell", { name: "旁白音色" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "包装主图" })).toHaveCount(0);
+
+  await page.getByPlaceholder("搜索资产或任务").fill("");
+  await page.getByLabel("筛选资产类型").selectOption("image");
+  await expect(page.getByRole("cell", { name: "包装主图" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "旁白音色" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "删除资产" }).first().click();
+  await expect(page.getByRole("dialog", { name: "确认删除" })).toBeVisible();
+  await expect(page.getByText("该资产被引用 5 次，请确认后删除。")).toBeVisible();
+  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await expect(page.getByRole("cell", { name: "包装主图" })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "任务列表" }).click();
+  await page.getByLabel("筛选任务状态").selectOption("failed");
+  await expect(page.getByRole("cell", { name: /当前模型不支持音频参考/ })).toBeVisible();
+  await page.getByRole("button", { name: "查看任务" }).first().click();
+  await expect(page.getByText("原始提示词")).toBeVisible();
+
+  await page.getByRole("button", { name: "删除任务" }).first().click();
+  await expect(page.getByRole("dialog", { name: "确认删除" })).toBeVisible();
+  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await expect(page.getByRole("cell", { name: /当前模型不支持音频参考/ })).toHaveCount(0);
+});
+
 test("user can save and test masked API credentials", async ({ page }) => {
   let credentials: Array<{ createdAt: string; defaultModelId: null; displayName: string; id: string; maskedLabel: string; provider: "jimeng"; serviceRegion: null; updatedAt: string }> = [];
 

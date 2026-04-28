@@ -24,7 +24,7 @@ export function LoginPage() {
 
   function showFailure(next: () => void) {
     setSubmitState("submitting");
-    window.setTimeout(next, 250);
+    window.setTimeout(next, 600);
   }
 
   function handlePasswordLogin(event: FormEvent<HTMLFormElement>) {

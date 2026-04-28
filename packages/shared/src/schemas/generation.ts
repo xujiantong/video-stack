@@ -11,7 +11,8 @@ export const estimateGenerationRequestSchema = z.object({
   promptText: z.string().min(1).max(MAX_PROMPT_LENGTH),
   assetRefs: z.array(assetMentionSchema).max(MAX_ASSET_REFS),
   provider: providerSchema,
-  parameters: generationParametersSchema.optional()
+  parameters: generationParametersSchema.optional(),
+  sourceTaskId: z.string().uuid().optional()
 });
 
 export const estimateGenerationResponseSchema = z.object({
@@ -35,8 +36,7 @@ export const createGenerationRequestSchema = estimateGenerationRequestSchema.ext
 });
 
 export const regenerateGenerationRequestSchema = createGenerationRequestSchema.extend({
-  sourceTaskId: z.string().uuid(),
-  secondConfirmToken: z.string().min(SECOND_CONFIRM_TOKEN_MIN_LENGTH)
+  sourceTaskId: z.string().uuid()
 });
 
 export const listGenerationTasksQuerySchema = z.object({

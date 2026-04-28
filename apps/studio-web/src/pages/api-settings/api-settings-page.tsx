@@ -182,7 +182,7 @@ export function ApiSettingsPage() {
                   <p className="mt-1 text-sm text-muted-foreground">{credential.maskedLabel}</p>
                 </div>
                 <Button
-                  aria-label="删除凭证"
+                  aria-label={`删除凭证：${credential.displayName}`}
                   className="size-9 px-0 text-danger"
                   type="button"
                   variant="ghost"

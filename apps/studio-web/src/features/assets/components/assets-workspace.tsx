@@ -71,11 +71,11 @@ function AssetsToolbar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <TabsList>
-        <TabsTrigger active={activeTab === "assets"} onClick={() => onTabChange("assets")}>
+      <TabsList aria-label="资产页面视图">
+        <TabsTrigger active={activeTab === "assets"} aria-controls="assets-panel" id="assets-tab" onClick={() => onTabChange("assets")}>
           资产库
         </TabsTrigger>
-        <TabsTrigger active={activeTab === "tasks"} onClick={() => onTabChange("tasks")}>
+        <TabsTrigger active={activeTab === "tasks"} aria-controls="tasks-panel" id="tasks-tab" onClick={() => onTabChange("tasks")}>
           任务列表
         </TabsTrigger>
       </TabsList>
@@ -195,7 +195,7 @@ function AssetTable({
         ))}
         {assets.length === 0 ? (
           <TableRow>
-            <TableCell className="py-10 text-center text-muted-foreground" colSpan={8}>
+            <TableCell className="py-10 text-center text-muted-foreground" colSpan={8} role="status">
               没有匹配资产，请调整搜索或筛选条件。
             </TableCell>
           </TableRow>
@@ -266,7 +266,7 @@ function TaskTable({
         ))}
         {tasks.length === 0 ? (
           <TableRow>
-            <TableCell className="py-10 text-center text-muted-foreground" colSpan={6}>
+            <TableCell className="py-10 text-center text-muted-foreground" colSpan={6} role="status">
               没有匹配任务，请调整搜索或筛选条件。
             </TableCell>
           </TableRow>
@@ -472,7 +472,7 @@ export function AssetsWorkspace() {
           type="file"
         />
         {activeTab === "assets" ? (
-          <TabsContent>
+          <TabsContent aria-labelledby="assets-tab" id="assets-panel">
             <AssetTable
               assets={filteredAssets}
               onDelete={(asset) => setPendingDelete({ type: "asset", id: asset.id, label: asset.label, references: asset.references })}
@@ -491,7 +491,7 @@ export function AssetsWorkspace() {
             />
           </TabsContent>
         ) : (
-          <TabsContent>
+          <TabsContent aria-labelledby="tasks-tab" id="tasks-panel">
             <TaskTable
               onCopyParameters={(task) => {
                 const parameters = task.parameters ? JSON.stringify(task.parameters, null, 2) : "当前任务没有参数快照。";

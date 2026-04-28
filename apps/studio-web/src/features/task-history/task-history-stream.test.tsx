@@ -78,4 +78,19 @@ describe("TaskHistoryStream", () => {
     expect(await screen.findByText("生成中")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("已完成")).toBeInTheDocument());
   });
+
+  it("shows a concrete next step when a failed task has no provider message", async () => {
+    const failedTask: GenerationTask = {
+      ...baseTask,
+      status: "failed",
+      errorMessage: null,
+      updatedAt: "2026-04-28T08:00:02.000Z",
+      finishedAt: "2026-04-28T08:00:02.000Z"
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([failedTask])));
+
+    renderStream();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("生成失败，请稍后重试或查看详情。");
+  });
 });

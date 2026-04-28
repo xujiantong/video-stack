@@ -116,8 +116,9 @@ export function GenerationComposer() {
           </div>
           <div className="rounded-popover border border-border bg-background/80 p-2 shadow-popover">
             <p className="mb-1.5 text-xs text-muted-foreground">可能 @ 的内容</p>
+            {assets.length === 0 ? <p className="px-2 py-1.5 text-xs text-muted-foreground">暂无可引用内容，请先上传参考内容。</p> : null}
             {assets.map((asset) => (
-              <Button className="h-auto w-full justify-start px-2 py-1.5 text-xs" key={asset.id} type="button" variant="ghost">
+              <Button aria-label={`引用${asset.label}`} className="h-auto w-full justify-start px-2 py-1.5 text-xs" key={asset.id} type="button" variant="ghost">
                 <span className="grid size-6 place-items-center rounded-button bg-muted text-primary">
                   <Upload className="size-3" aria-hidden="true" />
                 </span>

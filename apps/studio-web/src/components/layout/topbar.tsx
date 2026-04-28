@@ -1,9 +1,13 @@
-import { ChevronDown, LogIn, Search } from "lucide-react";
+import { LogIn, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
-const filterLabels = ["今天", "视频生成", "全部操作"];
+const filters = [
+  { label: "时间筛选", options: ["今天", "本周", "全部时间"] },
+  { label: "生成类型筛选", options: ["视频生成", "图片参考", "音频参考"] },
+  { label: "操作类型筛选", options: ["全部操作", "生成", "上传"] }
+];
 
 export function Topbar() {
   const view = useComposerStore((state) => state.view);
@@ -36,16 +40,19 @@ export function Topbar() {
             placeholder="搜索素材、任务或提示词"
           />
         </label>
-        {filterLabels.map((label) => (
-          <Button
-            className="h-9"
-            key={label}
-            type="button"
-            variant="secondary"
+        {filters.map((filter) => (
+          <select
+            aria-label={filter.label}
+            className="h-9 rounded-button border border-border bg-muted px-3 text-sm text-foreground outline-none transition hover:border-primary/70 focus:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            defaultValue={filter.options[0] ?? ""}
+            key={filter.label}
           >
-            {label}
-            <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-          </Button>
+            {filter.options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         ))}
         <Button className="h-9" type="button" variant="secondary" onClick={() => setView("login")}>
           <LogIn className="size-4" aria-hidden="true" />

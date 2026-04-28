@@ -70,7 +70,7 @@ export function createGenerationRoutes(deps: GenerationRouteDeps): FastifyPlugin
         const input = estimateGenerationRequestSchema.parse(request.body);
         await validateModelAndAssets(deps.repository, input);
         const estimate = estimateCost(input);
-        const secondConfirm = requiresSecondConfirm(estimate.estimatedCostCents);
+        const secondConfirm = requiresSecondConfirm(estimate.estimatedCostCents) || Boolean(input.sourceTaskId);
 
         return estimateGenerationResponseSchema.parse({
           estimatedCostCents: estimate.estimatedCostCents,
@@ -147,7 +147,7 @@ export function createGenerationRoutes(deps: GenerationRouteDeps): FastifyPlugin
         const input = estimateGenerationRequestSchema.parse(request.body);
         await validateModelAndAssets(deps.repository, input);
         const estimate = estimateCost(input);
-        const secondConfirm = requiresSecondConfirm(estimate.estimatedCostCents);
+        const secondConfirm = requiresSecondConfirm(estimate.estimatedCostCents) || Boolean(input.sourceTaskId);
 
         return estimateGenerationResponseSchema.parse({
           estimatedCostCents: estimate.estimatedCostCents,

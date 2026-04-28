@@ -98,6 +98,7 @@ export async function estimateGeneration(input: {
   promptText: string;
   assetRefs: AssetMention[];
   parameters: GenerationParameters;
+  sourceTaskId?: string;
 }): Promise<EstimateGenerationResponse> {
   const { promptText, assetRefs, parameters } = input;
   const model = DEFAULT_MODEL_CAPABILITIES.find((item) => item.id === parameters.modelId) ?? DEFAULT_MODEL_CAPABILITIES[0]!;
@@ -108,7 +109,7 @@ export async function estimateGeneration(input: {
       assetRefs.length * model.pricing.perAssetCents +
       parameters.durationSeconds * model.pricing.perSecondCents
   );
-  const fallbackRequiresSecondConfirm = fallbackCostCents >= HIGH_COST_THRESHOLD_CENTS;
+  const fallbackRequiresSecondConfirm = fallbackCostCents >= HIGH_COST_THRESHOLD_CENTS || Boolean(input.sourceTaskId);
   const fallback = {
     estimatedCostCents: fallbackCostCents,
     estimatedSeconds: parameters.durationSeconds * 6,
@@ -120,7 +121,7 @@ export async function estimateGeneration(input: {
     const response = await fetch("/api/generation/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: input.projectId, promptText, assetRefs, provider: "jimeng", parameters })
+      body: JSON.stringify({ projectId: input.projectId, promptText, assetRefs, provider: "jimeng", parameters, sourceTaskId: input.sourceTaskId })
     });
     if (!response.ok) return fallback;
     return (await response.json()) as EstimateGenerationResponse;
@@ -166,6 +167,29 @@ export async function getGenerationTask(taskId: string): Promise<GenerationTask>
   }
 }
 
+function createMockQueuedTask(input: CreateGenerationRequest & { fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm"> }): GenerationTask {
+  const now = new Date().toISOString();
+  const task: GenerationTask = {
+    id: crypto.randomUUID(),
+    projectId: input.projectId,
+    provider: input.provider,
+    promptDoc: input.promptDoc,
+    promptText: input.promptText,
+    parameters: input.parameters,
+    assetRefs: input.assetRefs,
+    status: "queued",
+    estimatedCostCents: input.fallbackEstimate?.estimatedCostCents ?? Math.max(300, input.promptText.length * 2),
+    actualCostCents: null,
+    requiresSecondConfirm: input.fallbackEstimate?.requiresSecondConfirm ?? false,
+    resultAssetId: null,
+    errorMessage: null,
+    createdAt: now,
+    updatedAt: now
+  };
+  mockTasks.unshift(task);
+  return task;
+}
+
 export async function createGenerationTask(
   input: CreateGenerationRequest & {
     fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm">;
@@ -179,30 +203,35 @@ export async function createGenerationTask(
       body: JSON.stringify(input)
     });
   } catch {
-    const now = new Date().toISOString();
-    const task: GenerationTask = {
-      id: crypto.randomUUID(),
-      projectId: input.projectId,
-      provider: input.provider,
-      promptDoc: input.promptDoc,
-      promptText: input.promptText,
-      parameters: input.parameters,
-      assetRefs: input.assetRefs,
-      status: "queued",
-      estimatedCostCents: input.fallbackEstimate?.estimatedCostCents ?? Math.max(300, input.promptText.length * 2),
-      actualCostCents: null,
-      requiresSecondConfirm: input.fallbackEstimate?.requiresSecondConfirm ?? false,
-      resultAssetId: null,
-      errorMessage: null,
-      createdAt: now,
-      updatedAt: now
-    };
-    mockTasks.unshift(task);
-    return task;
+    return createMockQueuedTask(input);
   }
 
   if (!response.ok) {
     throw new Error("创建任务失败，请检查参数后重试。");
+  }
+
+  return (await response.json()) as GenerationTask;
+}
+
+export async function regenerateGenerationTask(
+  sourceTaskId: string,
+  input: CreateGenerationRequest & {
+    fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm">;
+  }
+): Promise<GenerationTask> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/generation/tasks/${sourceTaskId}/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    });
+  } catch {
+    return createMockQueuedTask({ ...input, fallbackEstimate: { estimatedCostCents: input.fallbackEstimate?.estimatedCostCents ?? Math.max(300, input.promptText.length * 2), requiresSecondConfirm: true } });
+  }
+
+  if (!response.ok) {
+    throw new Error("再次生成失败，请重新预估费用后再试。");
   }
 
   return (await response.json()) as GenerationTask;

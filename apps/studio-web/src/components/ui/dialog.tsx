@@ -20,6 +20,7 @@ export function Dialog({ children, open, title, onOpenChange }: DialogProps) {
         aria-modal="true"
         className="w-full max-w-lg rounded-popover border border-border bg-surface p-4 shadow-popover"
         role="dialog"
+        tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key === "Escape") onOpenChange(false);
         }}

@@ -199,6 +199,42 @@ describe("generation routes", () => {
     expect(queue.jobs).toHaveLength(2);
   });
 
+  it("requires confirmation for low cost regeneration", async () => {
+    const { app } = await buildApp();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: baseRequest
+    });
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+
+    const rejectedResponse = await app.inject({
+      method: "POST",
+      url: `/api/generation/tasks/${created.id}/regenerate`,
+      payload: baseRequest
+    });
+    expect(rejectedResponse.statusCode).toBe(400);
+    expect(rejectedResponse.json()).toEqual(expect.objectContaining({ error: expect.objectContaining({ code: "GENERATION_HIGH_COST_CONFIRM_REQUIRED" }) }));
+
+    const estimateResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/estimate",
+      payload: { ...baseRequest, sourceTaskId: created.id }
+    });
+    expect(estimateResponse.statusCode).toBe(200);
+    expect(estimateResponse.json()).toEqual(expect.objectContaining({ requiresSecondConfirm: true, secondConfirmToken: expect.any(String) }));
+
+    const regenerateResponse = await app.inject({
+      method: "POST",
+      url: `/api/generation/tasks/${created.id}/regenerate`,
+      payload: { ...baseRequest, secondConfirmToken: estimateResponse.json().secondConfirmToken }
+    });
+    expect(regenerateResponse.statusCode).toBe(201);
+    expect(regenerateResponse.json()).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: true }));
+  });
+
   it("uses unified errors for unsupported capabilities, missing credentials, and unavailable assets", async () => {
     const { app } = await buildApp();
 

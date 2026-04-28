@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleDashed, Clock3, MoreHorizontal, PenLine, Play, RefreshCcw, XCircle } from "lucide-react";
 import type { GenerationTask } from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
@@ -35,17 +36,22 @@ function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
 
 function TaskHistoryCard({
   compact = false,
+  onEdit,
   onFocus,
+  onRegenerate,
   pollIntervalMs,
   selected = false,
   task
 }: {
   compact?: boolean;
+  onEdit?: ((task: GenerationTask) => void) | undefined;
   onFocus?: ((task: GenerationTask) => void) | undefined;
+  onRegenerate?: ((task: GenerationTask) => void) | undefined;
   pollIntervalMs: number;
   selected?: boolean;
   task: GenerationTask;
 }) {
+  const queryClient = useQueryClient();
   const detailQuery = useQuery({
     queryKey: generationTaskKey(task.id),
     queryFn: () => getGenerationTask(task.id),
@@ -55,8 +61,13 @@ function TaskHistoryCard({
     refetchIntervalInBackground: true
   });
   const currentTask = isActiveTask(task.status) ? (detailQuery.data ?? task) : task;
+  useEffect(() => {
+    if (!detailQuery.data || isActiveTask(detailQuery.data.status)) return;
+    queryClient.setQueryData<GenerationTask[]>(generationTasksKey(task.projectId), (rows) => rows?.map((row) => (row.id === detailQuery.data?.id ? detailQuery.data : row)) ?? rows);
+  }, [detailQuery.data, queryClient, task.projectId]);
   const parameters = currentTask.parameters;
-  const failureMessage = currentTask.errorMessage ? `${currentTask.errorMessage} 请调整参数后重试。` : null;
+  const failureMessage =
+    currentTask.status === "failed" ? (currentTask.errorMessage ? `${currentTask.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。") : null;
 
   return (
     <article
@@ -116,11 +127,11 @@ function TaskHistoryCard({
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-warning">¥{(currentTask.estimatedCostCents / 100).toFixed(2)}</span>
           <div className="flex gap-2">
-            <Button className="h-8 px-2 text-xs" type="button" variant="secondary">
+            <Button className="h-8 px-2 text-xs" onClick={() => onEdit?.(currentTask)} type="button" variant="secondary">
               <PenLine className="size-3" aria-hidden="true" />
               重新编辑
             </Button>
-            <Button className="h-8 px-2 text-xs" type="button" variant="secondary">
+            <Button className="h-8 px-2 text-xs" onClick={() => onRegenerate?.(currentTask)} type="button" variant="secondary">
               <RefreshCcw className="size-3" aria-hidden="true" />
               再次生成
             </Button>
@@ -141,14 +152,18 @@ export function TaskHistoryStream({ pollIntervalMs = taskPollIntervalMs, project
 export function TaskHistoryStreamView({
   className,
   compact = false,
+  onTaskEdit,
   onTaskFocus,
+  onTaskRegenerate,
   pollIntervalMs = taskPollIntervalMs,
   projectId,
   selectedTaskId
 }: {
   className?: string;
   compact?: boolean;
+  onTaskEdit?: ((task: GenerationTask) => void) | undefined;
   onTaskFocus?: ((task: GenerationTask) => void) | undefined;
+  onTaskRegenerate?: ((task: GenerationTask) => void) | undefined;
   pollIntervalMs?: number;
   projectId: string;
   selectedTaskId?: string | undefined;
@@ -184,7 +199,9 @@ export function TaskHistoryStreamView({
           <TaskHistoryCard
             compact={compact}
             key={task.id}
+            onEdit={onTaskEdit}
             onFocus={onTaskFocus}
+            onRegenerate={onTaskRegenerate}
             pollIntervalMs={pollIntervalMs}
             selected={selectedTaskId === task.id}
             task={task}

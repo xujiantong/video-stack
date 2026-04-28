@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Copy, Film, Maximize2, PenLine, Play, RefreshCcw, ShieldAlert } from "lucide-react";
-import type { GenerationTask } from "@video-stack/shared";
+import { DEFAULT_GENERATION_PARAMETERS, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogCloseButton, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TaskHistoryStreamView } from "@/features/task-history/task-history-stream";
-import { generationTasksKey, listGenerationTasks } from "@/lib/api/generation-api";
+import { estimateGeneration, generationTaskKey, generationTasksKey, listGenerationTasks, regenerateGenerationTask } from "@/lib/api/generation-api";
+import { useComposerStore } from "@/lib/stores/composer-store";
 
 const statusTone: Record<GenerationTask["status"], "muted" | "primary" | "warning" | "danger" | "success"> = {
   draft: "muted",
@@ -16,11 +18,26 @@ const statusTone: Record<GenerationTask["status"], "muted" | "primary" | "warnin
   failed: "danger",
   canceled: "muted"
 };
+const taskPollIntervalMs = 1_500;
 
-function PreviewStage({ task }: { task: GenerationTask | undefined }) {
+function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
+  return tasks?.some((task) => task.status === "queued" || task.status === "running") ?? false;
+}
+
+function PreviewStage({
+  onEdit,
+  onRegenerate,
+  regeneratePending,
+  task
+}: {
+  onEdit(task: GenerationTask): void;
+  onRegenerate(task: GenerationTask): void;
+  regeneratePending: boolean;
+  task: GenerationTask | undefined;
+}) {
   if (!task) {
     return (
-      <section className="grid min-h-[420px] place-items-center rounded-card border border-border bg-surface">
+      <section aria-label="视频预览" className="grid min-h-[420px] place-items-center rounded-card border border-border bg-surface" role="region">
         <div className="max-w-sm text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-card border border-border bg-muted text-muted-foreground">
             <Film className="size-6" aria-hidden="true" />
@@ -37,7 +54,7 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
   const costCents = task.actualCostCents ?? task.estimatedCostCents;
 
   return (
-    <section className="min-h-0 rounded-card border border-border bg-surface">
+    <section aria-label="视频预览" className="min-h-0 rounded-card border border-border bg-surface" role="region">
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <p className="text-xs uppercase text-muted-foreground">视频预览</p>
@@ -54,7 +71,7 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
               <Play className="size-5 fill-current" aria-hidden="true" />
             </Button>
           ) : hasFailed ? (
-            <div className="max-w-md px-6 text-center">
+            <div className="max-w-md px-6 text-center" role="alert">
               <ShieldAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
               <p className="mt-3 text-sm font-medium text-danger">生成失败</p>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.errorMessage ? `${task.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。"}</p>
@@ -107,7 +124,7 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
           </dl>
         </div>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary">
+          <Button type="button" variant="secondary" onClick={() => onEdit(task)}>
             <PenLine className="size-4" aria-hidden="true" />
             重新编辑
           </Button>
@@ -115,7 +132,7 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
             <Copy className="size-4" aria-hidden="true" />
             复制参数
           </Button>
-          <Button type="button">
+          <Button type="button" onClick={() => onRegenerate(task)} disabled={regeneratePending}>
             <RefreshCcw className="size-4" aria-hidden="true" />
             再次生成
           </Button>
@@ -129,13 +146,62 @@ function PreviewStage({ task }: { task: GenerationTask | undefined }) {
 }
 
 export function WorkbenchDashboard({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
+  const [confirmRegenerate, setConfirmRegenerate] = useState<{ estimate: EstimateGenerationResponse; task: GenerationTask } | null>(null);
+  const setPrompt = useComposerStore((state) => state.setPrompt);
+  const setParameters = useComposerStore((state) => state.setParameters);
   const tasksQuery = useQuery({
     queryKey: generationTasksKey(projectId),
-    queryFn: () => listGenerationTasks(projectId)
+    queryFn: () => listGenerationTasks(projectId),
+    refetchInterval: (query) => (hasActiveTasks(query.state.data) ? taskPollIntervalMs : false),
+    refetchIntervalInBackground: true
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  const regenerateMutation = useMutation({
+    mutationFn: async ({ estimate, task }: { estimate: EstimateGenerationResponse; task: GenerationTask }) =>
+      regenerateGenerationTask(task.id, {
+        projectId,
+        provider: task.provider,
+        credentialId: "00000000-0000-4000-8000-000000000401",
+        promptDoc: task.promptDoc,
+        promptText: task.promptText,
+        parameters: task.parameters ?? DEFAULT_GENERATION_PARAMETERS,
+        assetRefs: task.assetRefs,
+        secondConfirmToken: estimate.secondConfirmToken,
+        fallbackEstimate: { estimatedCostCents: estimate.estimatedCostCents, requiresSecondConfirm: true }
+      }),
+    onSuccess(task) {
+      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(projectId), (rows) => [task, ...(rows?.filter((row) => row.id !== task.id) ?? [])]);
+      queryClient.setQueryData(generationTaskKey(task.id), task);
+      setSelectedTaskId(task.id);
+      setConfirmRegenerate(null);
+    }
+  });
+  const estimateMutation = useMutation({
+    mutationFn: (task: GenerationTask) =>
+      estimateGeneration({
+        projectId,
+        promptText: task.promptText,
+        assetRefs: task.assetRefs,
+        parameters: task.parameters ?? DEFAULT_GENERATION_PARAMETERS,
+        sourceTaskId: task.id
+      }),
+    onSuccess(estimate, task) {
+      setConfirmRegenerate({ estimate, task });
+    }
+  });
+
+  function editTask(task: GenerationTask) {
+    setPrompt(task.promptText);
+    if (task.parameters) setParameters(task.parameters);
+  }
+
+  function confirmAgain() {
+    if (!confirmRegenerate?.estimate.secondConfirmToken) return;
+    regenerateMutation.mutate(confirmRegenerate);
+  }
 
   return (
     <div className="grid min-h-full gap-4 p-4 pb-6 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -150,12 +216,34 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
         <TaskHistoryStreamView
           className="pb-2"
           compact
+          onTaskEdit={editTask}
           onTaskFocus={(task) => setSelectedTaskId(task.id)}
+          onTaskRegenerate={(task) => estimateMutation.mutate(task)}
           projectId={projectId}
           selectedTaskId={selectedTask?.id}
         />
       </aside>
-      <PreviewStage task={selectedTask} />
+      <PreviewStage onEdit={editTask} onRegenerate={(task) => estimateMutation.mutate(task)} regeneratePending={estimateMutation.isPending || regenerateMutation.isPending} task={selectedTask} />
+      <Dialog open={confirmRegenerate !== null} title="确认再次生成" onOpenChange={(open) => !open && setConfirmRegenerate(null)}>
+        <DialogHeader>
+          <div>
+            <DialogTitle>确认再次生成</DialogTitle>
+            <DialogDescription>本次预计 ¥{((confirmRegenerate?.estimate.estimatedCostCents ?? 0) / 100).toFixed(2)}。确认后再次生成任务。</DialogDescription>
+          </div>
+          <DialogCloseButton onClose={() => setConfirmRegenerate(null)} />
+        </DialogHeader>
+        <div className="rounded-card border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+          系统会复用原提示词、参数和引用素材。
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={() => setConfirmRegenerate(null)}>
+            取消
+          </Button>
+          <Button type="button" onClick={confirmAgain} disabled={!confirmRegenerate?.estimate.secondConfirmToken || regenerateMutation.isPending}>
+            确认再次生成
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

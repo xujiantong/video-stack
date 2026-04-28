@@ -44,7 +44,6 @@ export function AssetsPage() {
   const setAssetStatus = useComposerStore((state) => state.setAssetStatus);
   const selectedTask = tasks[0];
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadingIds, setUploadingIds] = useState<Set<string>>(() => new Set());
   const [retryFiles, setRetryFiles] = useState<Record<string, File>>({});
   const projectId = useMemo(() => tasks[0]?.projectId ?? "00000000-0000-4000-8000-000000000001", [tasks]);
 
@@ -62,7 +61,6 @@ export function AssetsPage() {
 
       nextAssetId = presign.assetId;
       setRetryFiles((state) => ({ ...state, [presign.assetId]: file }));
-      setUploadingIds((state) => new Set([...state, presign.assetId]));
       upsertAsset({
         id: presign.assetId,
         kind: toFileType(file.type) === "audio" ? "audio" : toFileType(file.type) === "video" ? "video" : "image",
@@ -81,14 +79,6 @@ export function AssetsPage() {
     } catch (error) {
       if (nextAssetId) {
         setAssetStatus(nextAssetId, "failed", error instanceof Error ? error.message : "上传失败，请重试。");
-      }
-    } finally {
-      if (nextAssetId) {
-        setUploadingIds((state) => {
-          const next = new Set(state);
-          next.delete(nextAssetId);
-          return next;
-        });
       }
     }
   }

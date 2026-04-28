@@ -1,41 +1,31 @@
-import { useMutation } from "@tanstack/react-query";
-import { AtSign, Calculator, ChevronDown, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
-import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { AtSign, Calculator, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
+import type { GenerationTask } from "@video-stack/shared";
+import { ModelParameterToolbar } from "./model-parameter-toolbar";
 import { PromptEditor } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
+import { estimateGeneration, listGenerationModels } from "@/lib/api/generation-api";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
 const credentialId = "00000000-0000-4000-8000-000000000401";
 
-async function estimateGeneration(input: { promptText: string; assetRefs: unknown[] }): Promise<EstimateGenerationResponse> {
-  const { promptText, assetRefs } = input;
-  const fallback = {
-    estimatedCostCents: Math.max(300, promptText.length * 2),
-    estimatedSeconds: 45,
-    requiresSecondConfirm: false
-  };
-
-  try {
-    const response = await fetch("/api/generation/estimate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, promptText, assetRefs, provider: "jimeng" })
-    });
-    if (!response.ok) return fallback;
-    return (await response.json()) as EstimateGenerationResponse;
-  } catch {
-    return fallback;
-  }
-}
-
 export function GenerationComposer() {
   const prompt = useComposerStore((state) => state.prompt);
   const promptDoc = useComposerStore((state) => state.promptDoc);
   const assetRefs = useComposerStore((state) => state.assetRefs);
+  const parameters = useComposerStore((state) => state.parameters);
   const assets = useComposerStore((state) => state.assets);
   const setPromptDoc = useComposerStore((state) => state.setPromptDoc);
+  const setParameters = useComposerStore((state) => state.setParameters);
   const addTask = useComposerStore((state) => state.addTask);
+
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: listGenerationModels,
+    staleTime: 5 * 60 * 1000
+  });
+  const models = modelsQuery.data ?? [];
 
   const estimateMutation = useMutation({
     mutationFn: estimateGeneration
@@ -50,6 +40,7 @@ export function GenerationComposer() {
         provider: "jimeng",
         promptDoc,
         promptText: prompt,
+        parameters,
         assetRefs,
         status: "queued",
         estimatedCostCents: estimateMutation.data?.estimatedCostCents ?? Math.max(300, prompt.length * 2),
@@ -75,18 +66,8 @@ export function GenerationComposer() {
       <div className="mx-auto grid max-w-6xl gap-4 rounded-composer border border-border bg-surface-raised p-4 shadow-composer lg:grid-cols-[1fr_280px]">
         <div className="min-w-0">
           <PromptEditor assets={assets} assetRefs={assetRefs} prompt={prompt} promptDoc={promptDoc} onPromptDocChange={setPromptDoc} />
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            {["视频生成", "Seedance 2.0", "全能参考", "16:9", "1080P", "15s"].map((item) => (
-              <Button
-                className="h-8 px-3 text-xs"
-                key={item}
-                type="button"
-                variant="secondary"
-              >
-                {item}
-                <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-              </Button>
-            ))}
+          <div className="mt-3 flex flex-wrap items-start gap-2 border-t border-border pt-3">
+            {models.length > 0 ? <ModelParameterToolbar models={models} parameters={parameters} onParametersChange={setParameters} /> : null}
             <Button
               aria-label="打开资产引用菜单"
               className="h-8 px-3 text-xs text-primary"
@@ -126,7 +107,7 @@ export function GenerationComposer() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => estimateMutation.mutate({ promptText: prompt, assetRefs })}
+              onClick={() => estimateMutation.mutate({ projectId, promptText: prompt, assetRefs, parameters })}
               disabled={prompt.trim().length === 0 || estimateMutation.isPending}
             >
               <Calculator className="size-4" aria-hidden="true" />

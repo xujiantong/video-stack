@@ -5,6 +5,7 @@ import { createInMemoryStudioRepository } from "./db/repositories";
 import { createAssetRoutes } from "./routes/assets";
 import { createCredentialRoutes } from "./routes/credentials";
 import { generationRoutes } from "./routes/generation";
+import { modelRoutes } from "./routes/models";
 import { createAssetService } from "./services/asset-service";
 import { createCredentialService } from "./services/credential-service";
 import { createStorageService } from "./services/storage-service";
@@ -29,6 +30,7 @@ export async function buildServer() {
   await app.register(cors, { origin: true });
   await app.register(createCredentialRoutes(credentialService), { prefix: "/api" });
   await app.register(createAssetRoutes(assetService), { prefix: "/api" });
+  await app.register(modelRoutes, { prefix: "/api" });
   await app.register(generationRoutes, { prefix: "/api" });
 
   app.get("/health", async () => ({ ok: true }));

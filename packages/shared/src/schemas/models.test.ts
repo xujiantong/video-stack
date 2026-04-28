@@ -7,9 +7,9 @@ const baseCapability = {
   displayName: "Seedance Demo",
   supportedModes: ["text_to_video", "reference_to_video"],
   supportedReferenceModes: ["none", "image"],
-  supportedAspectRatios: ["16:9", "9:16"],
+  supportedRatios: ["16:9", "9:16"],
   supportedResolutions: ["720p", "1080p"],
-  supportedDurationsSeconds: [5, 10, 15],
+  supportedDurations: [5, 10, 15],
   supportsAudioReference: false,
   pricing: {
     baseCostCents: 300,

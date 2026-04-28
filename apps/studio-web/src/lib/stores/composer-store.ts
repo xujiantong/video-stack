@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AssetMention, GenerationTask } from "@video-stack/shared";
+import { DEFAULT_GENERATION_PARAMETERS, type AssetMention, type GenerationParameters, type GenerationTask } from "@video-stack/shared";
 
 export type StudioView = "inspiration" | "generate" | "assets" | "settings" | "api";
 
@@ -18,11 +18,13 @@ type ComposerState = {
   prompt: string;
   promptDoc: Record<string, unknown>;
   assetRefs: AssetMention[];
+  parameters: GenerationParameters;
   assets: StudioAsset[];
   tasks: GenerationTask[];
   setView(view: StudioView): void;
   setPrompt(prompt: string): void;
   setPromptDoc(promptDoc: Record<string, unknown>, assetRefs: AssetMention[], promptText: string): void;
+  setParameters(parameters: GenerationParameters): void;
   upsertAsset(asset: StudioAsset): void;
   setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
   removeAsset(assetId: string): void;
@@ -36,6 +38,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   prompt: "生成 8 秒产品展示视频，突出包装细节和柔和灯光。",
   promptDoc: { type: "doc", content: [{ type: "text", text: "生成 8 秒产品展示视频，突出包装细节和柔和灯光。" }] },
   assetRefs: [],
+  parameters: DEFAULT_GENERATION_PARAMETERS,
   assets: [
     {
       id: "00000000-0000-4000-8000-000000000101",
@@ -74,6 +77,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
       projectId: "00000000-0000-4000-8000-000000000001",
       provider: "jimeng",
       promptText: "生成 8 秒产品展示视频",
+      parameters: DEFAULT_GENERATION_PARAMETERS,
       assetRefs: [],
       status: "succeeded",
       estimatedCostCents: 860,
@@ -89,6 +93,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
       projectId: "00000000-0000-4000-8000-000000000001",
       provider: "jimeng",
       promptText: "把镜头改成俯拍，增加字幕",
+      parameters: DEFAULT_GENERATION_PARAMETERS,
       assetRefs: [],
       status: "running",
       estimatedCostCents: 1120,
@@ -104,6 +109,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
       projectId: "00000000-0000-4000-8000-000000000001",
       provider: "jimeng",
       promptText: "使用 @包装主图 展示产品旋转，镜头从微距拉到全景。",
+      parameters: DEFAULT_GENERATION_PARAMETERS,
       assetRefs: [],
       status: "queued",
       estimatedCostCents: 1480,
@@ -119,6 +125,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
       projectId: "00000000-0000-4000-8000-000000000001",
       provider: "jimeng",
       promptText: "当前模型不支持音频参考，请移除 @旁白音色 或切换模型。",
+      parameters: DEFAULT_GENERATION_PARAMETERS,
       assetRefs: [],
       status: "failed",
       estimatedCostCents: 980,
@@ -138,6 +145,9 @@ export const useComposerStore = create<ComposerState>((set) => ({
   },
   setPromptDoc(promptDoc, assetRefs, promptText) {
     set({ promptDoc, assetRefs, prompt: promptText });
+  },
+  setParameters(parameters) {
+    set({ parameters });
   },
   upsertAsset(asset) {
     set((state) => {

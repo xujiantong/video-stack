@@ -35,9 +35,9 @@ export const modelCapabilitySchema = z.object({
   displayName: z.string().min(1).max(120),
   supportedModes: z.array(generationModeSchema).min(1),
   supportedReferenceModes: z.array(referenceModeSchema).min(1),
-  supportedAspectRatios: z.array(aspectRatioSchema).min(1),
+  supportedRatios: z.array(aspectRatioSchema).min(1),
   supportedResolutions: z.array(videoResolutionSchema).min(1),
-  supportedDurationsSeconds: z.array(videoDurationSecondsSchema).min(1),
+  supportedDurations: z.array(videoDurationSecondsSchema).min(1),
   supportsAudioReference: z.boolean(),
   maxPromptLength: z.number().int().positive().max(MAX_PROMPT_LENGTH).default(MAX_PROMPT_LENGTH),
   maxAssetRefs: z.number().int().nonnegative().max(MAX_ASSET_REFS).default(MAX_ASSET_REFS),
@@ -67,13 +67,61 @@ export function modelSupportsParameters(input: ModelCompatibilityInput): boolean
     input.capability.id === input.parameters.modelId &&
     input.capability.supportedModes.includes(input.parameters.mode) &&
     input.capability.supportedReferenceModes.includes(input.parameters.referenceMode) &&
-    input.capability.supportedAspectRatios.includes(input.parameters.aspectRatio) &&
+    input.capability.supportedRatios.includes(input.parameters.aspectRatio) &&
     input.capability.supportedResolutions.includes(input.parameters.resolution) &&
-    input.capability.supportedDurationsSeconds.includes(input.parameters.durationSeconds) &&
+    input.capability.supportedDurations.includes(input.parameters.durationSeconds) &&
     (!hasAudioRef || input.capability.supportsAudioReference) &&
     input.assetRefs.length <= input.capability.maxAssetRefs
   );
 }
+
+export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
+  {
+    id: "seedance-lite",
+    provider: "jimeng",
+    displayName: "Seedance Lite",
+    supportedModes: ["text_to_video", "image_to_video", "reference_to_video"],
+    supportedReferenceModes: ["none", "image"],
+    supportedRatios: ["16:9", "9:16", "1:1"],
+    supportedResolutions: ["720p", "1080p"],
+    supportedDurations: [5, 10],
+    supportsAudioReference: false,
+    pricing: {
+      baseCostCents: 300,
+      perSecondCents: 24,
+      perAssetCents: 120,
+      currency: "CNY"
+    }
+  },
+  {
+    id: "seedance-pro",
+    provider: "jimeng",
+    displayName: "Seedance Pro",
+    supportedModes: ["text_to_video", "image_to_video", "first_last_frame", "reference_to_video"],
+    supportedReferenceModes: ["none", "image", "audio", "image_audio", "first_last_frame"],
+    supportedRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    supportedResolutions: ["1080p"],
+    supportedDurations: [5, 10, 15],
+    supportsAudioReference: true,
+    pricing: {
+      baseCostCents: 500,
+      perSecondCents: 42,
+      perAssetCents: 160,
+      currency: "CNY"
+    }
+  }
+]);
+
+export const DEFAULT_MODEL_CAPABILITY = DEFAULT_MODEL_CAPABILITIES[0]!;
+
+export const DEFAULT_GENERATION_PARAMETERS = {
+  modelId: DEFAULT_MODEL_CAPABILITY.id,
+  mode: DEFAULT_MODEL_CAPABILITY.supportedModes[0]!,
+  referenceMode: DEFAULT_MODEL_CAPABILITY.supportedReferenceModes[0]!,
+  aspectRatio: DEFAULT_MODEL_CAPABILITY.supportedRatios[0]!,
+  resolution: DEFAULT_MODEL_CAPABILITY.supportedResolutions[0]!,
+  durationSeconds: DEFAULT_MODEL_CAPABILITY.supportedDurations[0]!
+} satisfies GenerationParameters;
 
 export type Provider = z.infer<typeof providerSchema>;
 export type GenerationMode = z.infer<typeof generationModeSchema>;

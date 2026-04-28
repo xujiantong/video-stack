@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { AtSign, Calculator, ChevronDown, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
 import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
-import { PromptEditor } from "@/components/editor/prompt-editor";
+import { PromptEditor } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
 import { useComposerStore } from "@/lib/stores/composer-store";
 

@@ -76,7 +76,7 @@ describe("generation routes", () => {
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generation/tasks",
+      url: "/api/generations",
       payload: {
         ...baseRequest,
         assetRefs: [{ id: readyAssetId, kind: "image", label: "包装主图" }],
@@ -103,11 +103,11 @@ describe("generation routes", () => {
     expect(listResponse.statusCode).toBe(200);
     expect(listResponse.json()).toEqual([expect.objectContaining({ id: created.id })]);
 
-    const detailResponse = await app.inject({ method: "GET", url: `/api/generation/tasks/${created.id}` });
+    const detailResponse = await app.inject({ method: "GET", url: `/api/generations/${created.id}` });
     expect(detailResponse.statusCode).toBe(200);
     expect(detailResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "queued" }));
 
-    const cancelResponse = await app.inject({ method: "POST", url: `/api/generation/tasks/${created.id}/cancel` });
+    const cancelResponse = await app.inject({ method: "POST", url: `/api/generations/${created.id}/cancel` });
     expect(cancelResponse.statusCode).toBe(200);
     expect(cancelResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "canceled" }));
 
@@ -175,12 +175,12 @@ describe("generation routes", () => {
         durationSeconds: 15
       }
     } as const;
-    const estimate = await app.inject({ method: "POST", url: "/api/generation/estimate", payload: highCostRequest });
+    const estimate = await app.inject({ method: "POST", url: "/api/generations/estimate", payload: highCostRequest });
     const secondConfirmToken = estimate.json().secondConfirmToken;
 
     const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generation/tasks",
+      url: "/api/generations",
       payload: { ...highCostRequest, secondConfirmToken }
     });
 
@@ -190,7 +190,7 @@ describe("generation routes", () => {
 
     const regenerateResponse = await app.inject({
       method: "POST",
-      url: `/api/generation/tasks/${created.id}/regenerate`,
+      url: `/api/generations/${created.id}/regenerate`,
       payload: { ...highCostRequest, secondConfirmToken }
     });
 

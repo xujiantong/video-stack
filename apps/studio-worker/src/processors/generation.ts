@@ -1,5 +1,5 @@
-import { jimengAdapter, type VideoProviderAdapter } from "@video-stack/provider-jimeng";
-import type { AssetMention } from "@video-stack/shared";
+import { jimengAdapter, ProviderAdapterError, type ProviderTaskStatus, type VideoProviderAdapter } from "@video-stack/provider-jimeng";
+import { isRetryableErrorCode, type AssetMention, type ErrorCode } from "@video-stack/shared";
 
 export type GenerationJobPayload = {
   taskId: string;
@@ -15,6 +15,7 @@ export type StoredGenerationTask = {
   provider: "jimeng";
   promptText: string;
   assetRefs: AssetMention[];
+  status?: "queued" | "running" | "succeeded" | "failed" | "canceled";
 };
 
 export type GenerationProcessorDeps = {
@@ -24,10 +25,16 @@ export type GenerationProcessorDeps = {
   loadAndDecryptCredential(userId: string, provider: "jimeng"): Promise<{ secretKey: string }>;
   createReadonlyAssetUrls(assetRefs: AssetMention[]): Promise<string[]>;
   saveProviderTaskId(taskId: string, providerTaskId: string): Promise<void>;
-  storeProviderResult(resultUrl: string): Promise<{ id: string }>;
-  markTaskSucceeded(taskId: string, resultAssetId: string): Promise<void>;
-  markTaskFailed(taskId: string, code: string, message: string): Promise<void>;
+  isTaskCanceled?(taskId: string): Promise<boolean>;
+  storeProviderResult(input: { providerTaskId: string; bytes: Uint8Array; resultUrl: string; mimeType: "video/mp4" }): Promise<{ id: string }>;
+  markTaskSucceeded(taskId: string, resultAssetId: string, actualCostCents: number): Promise<void>;
+  markTaskFailed(taskId: string, code: ErrorCode, message: string): Promise<void>;
+  markTaskCanceled?(taskId: string): Promise<void>;
+  waitBeforeNextPoll?(attempt: number): Promise<void>;
+  maxStatusPolls?: number;
 };
+
+class RetryableGenerationError extends Error {}
 
 export async function processGenerationJob(
   payload: GenerationJobPayload,
@@ -36,6 +43,10 @@ export async function processGenerationJob(
   try {
     await deps.markTaskRunning(payload.taskId);
     const task = await deps.loadGenerationTask(payload.taskId);
+    if (task.status === "canceled" || (await deps.isTaskCanceled?.(task.id))) {
+      await deps.markTaskCanceled?.(task.id);
+      return;
+    }
     const credential = await deps.loadAndDecryptCredential(task.userId, task.provider);
     const assetUrls = await deps.createReadonlyAssetUrls(task.assetRefs);
     const submitted = await deps.adapter.submit({
@@ -44,18 +55,62 @@ export async function processGenerationJob(
       assetUrls
     });
     await deps.saveProviderTaskId(task.id, submitted.providerTaskId);
-    const result = await deps.adapter.getStatus(submitted.providerTaskId);
+    const result = await pollProviderStatus(submitted.providerTaskId, task.id, deps);
 
-    if (result.status !== "succeeded" || !result.resultUrl) {
-      await deps.markTaskFailed(task.id, result.errorCode ?? "PROVIDER_FAILED", result.errorMessage ?? "生成失败");
+    if (result.status === "canceled") {
+      await deps.adapter.cancel(submitted.providerTaskId);
+      await deps.markTaskCanceled?.(task.id);
       return;
     }
 
-    const resultAsset = await deps.storeProviderResult(result.resultUrl);
-    await deps.markTaskSucceeded(task.id, resultAsset.id);
+    if (result.status === "failed" || !result.resultUrl) {
+      await failProviderStatus(task.id, result, deps);
+      return;
+    }
+
+    const bytes = await deps.adapter.downloadResult(submitted.providerTaskId, result.resultUrl);
+    const resultAsset = await deps.storeProviderResult({
+      providerTaskId: submitted.providerTaskId,
+      bytes,
+      resultUrl: result.resultUrl,
+      mimeType: "video/mp4"
+    });
+    await deps.markTaskSucceeded(task.id, resultAsset.id, result.actualCostCents ?? 0);
   } catch (error) {
+    if (error instanceof RetryableGenerationError) throw error;
+    if (error instanceof ProviderAdapterError) {
+      await deps.markTaskFailed(payload.taskId, error.code, error.message);
+      if (error.retryable) throw new RetryableGenerationError(error.message);
+      return;
+    }
     const message = error instanceof Error ? error.message : "生成失败";
-    await deps.markTaskFailed(payload.taskId, "WORKER_ERROR", message);
+    await deps.markTaskFailed(payload.taskId, "INTERNAL_ERROR", message);
+  }
+}
+
+async function pollProviderStatus(providerTaskId: string, taskId: string, deps: GenerationProcessorDeps): Promise<ProviderTaskStatus> {
+  const maxStatusPolls = deps.maxStatusPolls ?? 3;
+
+  for (let attempt = 1; attempt <= maxStatusPolls; attempt += 1) {
+    if (await deps.isTaskCanceled?.(taskId)) return { status: "canceled" };
+    const status = await deps.adapter.getStatus(providerTaskId);
+    if (status.status !== "running") return status;
+    await deps.waitBeforeNextPoll?.(attempt);
+  }
+
+  return {
+    status: "failed",
+    errorCode: "PROVIDER_TIMEOUT",
+    errorMessage: "即梦生成仍未完成，请稍后自动重试。"
+  };
+}
+
+async function failProviderStatus(taskId: string, status: ProviderTaskStatus, deps: GenerationProcessorDeps): Promise<void> {
+  const code = status.errorCode ?? "PROVIDER_FAILED";
+  const message = status.errorMessage ?? "生成失败，请检查参数后重试。";
+  await deps.markTaskFailed(taskId, code, message);
+  if (isRetryableErrorCode(code)) {
+    throw new RetryableGenerationError(message);
   }
 }
 
@@ -64,7 +119,7 @@ function createDefaultDeps(): GenerationProcessorDeps {
     adapter: jimengAdapter,
     async markTaskRunning() {},
     async loadGenerationTask(taskId) {
-      return { id: taskId, userId: crypto.randomUUID(), provider: "jimeng", promptText: "生成视频", assetRefs: [] };
+      return { id: taskId, userId: crypto.randomUUID(), provider: "jimeng", promptText: "生成视频", assetRefs: [], status: "queued" };
     },
     async loadAndDecryptCredential() {
       return { secretKey: "local-dev-secret" };
@@ -77,6 +132,9 @@ function createDefaultDeps(): GenerationProcessorDeps {
       return { id: crypto.randomUUID() };
     },
     async markTaskSucceeded() {},
-    async markTaskFailed() {}
+    async markTaskFailed() {},
+    async markTaskCanceled() {},
+    async waitBeforeNextPoll() {},
+    maxStatusPolls: 3
   };
 }

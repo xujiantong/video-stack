@@ -3,7 +3,9 @@ import {
   createGenerationRequestSchema,
   DEFAULT_GENERATION_PARAMETERS,
   DEFAULT_MODEL_CAPABILITIES,
+  estimateGenerationResponseSchema,
   estimateGenerationRequestSchema,
+  generationTaskSchema,
   type GenerationParameters,
   requiresSecondConfirm
 } from "@video-stack/shared";
@@ -37,21 +39,31 @@ export const generationRoutes: FastifyPluginAsync = async (app) => {
     const estimatedCostCents = estimate.estimatedCostCents;
     const secondConfirm = requiresSecondConfirm(estimatedCostCents);
 
-    return {
+    return estimateGenerationResponseSchema.parse({
       estimatedCostCents,
       estimatedSeconds: input.parameters?.durationSeconds ? input.parameters.durationSeconds * 6 : 45,
       requiresSecondConfirm: secondConfirm,
       secondConfirmToken: secondConfirm ? crypto.randomUUID().replaceAll("-", "") : undefined,
       costBreakdown: estimate.costBreakdown
-    };
+    });
   });
 
   app.post("/generation/tasks", async (request, reply) => {
     const input = createGenerationRequestSchema.parse(request.body);
     const now = new Date().toISOString();
     const estimate = estimateCost(input);
+    const needsSecondConfirm = requiresSecondConfirm(estimate.estimatedCostCents);
 
-    return reply.code(201).send({
+    if (needsSecondConfirm && !input.secondConfirmToken) {
+      return reply.code(400).send({
+        error: {
+          code: "GENERATION_HIGH_COST_CONFIRM_REQUIRED",
+          message: "本次费用较高，请确认金额后再生成。"
+        }
+      });
+    }
+
+    return reply.code(201).send(generationTaskSchema.parse({
       id: crypto.randomUUID(),
       projectId: input.projectId,
       provider: input.provider,
@@ -62,11 +74,11 @@ export const generationRoutes: FastifyPluginAsync = async (app) => {
       status: "queued",
       estimatedCostCents: estimate.estimatedCostCents,
       actualCostCents: null,
-      requiresSecondConfirm: Boolean(input.secondConfirmToken),
+      requiresSecondConfirm: needsSecondConfirm,
       resultAssetId: null,
       errorMessage: null,
       createdAt: now,
       updatedAt: now
-    });
+    }));
   });
 };

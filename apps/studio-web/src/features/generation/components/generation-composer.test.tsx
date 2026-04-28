@@ -47,4 +47,20 @@ describe("GenerationComposer", () => {
     expect(screen.getByLabelText<HTMLSelectElement>("时长").value).toBe("5");
     expect(screen.getByText("已按 Seedance Lite 能力调整参数。")).toBeInTheDocument();
   });
+
+  it("asks for confirmation before creating a high cost task", async () => {
+    renderComposer();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt" }), {
+      target: { value: "高成本生成".repeat(300) }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成" }));
+
+    expect(await screen.findByRole("dialog", { name: "确认高费用生成" })).toBeInTheDocument();
+    expect(screen.getByText(/确认后创建任务/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认生成" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "确认高费用生成" })).not.toBeInTheDocument());
+  });
 });

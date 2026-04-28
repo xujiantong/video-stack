@@ -1,16 +1,19 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AtSign, Calculator, SendHorizontal, ShieldAlert, Upload } from "lucide-react";
-import type { GenerationTask } from "@video-stack/shared";
+import type { EstimateGenerationResponse, GenerationTask } from "@video-stack/shared";
 import { ModelParameterToolbar } from "./model-parameter-toolbar";
 import { PromptEditor } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
-import { estimateGeneration, listGenerationModels } from "@/lib/api/generation-api";
+import { Dialog, DialogCloseButton, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { createGenerationTask, estimateGeneration, listGenerationModels } from "@/lib/api/generation-api";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
 const credentialId = "00000000-0000-4000-8000-000000000401";
 
 export function GenerationComposer() {
+  const [confirmEstimate, setConfirmEstimate] = useState<EstimateGenerationResponse | null>(null);
   const prompt = useComposerStore((state) => state.prompt);
   const promptDoc = useComposerStore((state) => state.promptDoc);
   const assetRefs = useComposerStore((state) => state.assetRefs);
@@ -32,34 +35,47 @@ export function GenerationComposer() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (): Promise<GenerationTask> => {
-      const now = new Date().toISOString();
-      return {
-        id: crypto.randomUUID(),
+    mutationFn: async (input: { estimate: EstimateGenerationResponse; secondConfirmToken?: string }): Promise<GenerationTask> =>
+      createGenerationTask({
         projectId,
         provider: "jimeng",
+        credentialId,
         promptDoc,
         promptText: prompt,
         parameters,
         assetRefs,
-        status: "queued",
-        estimatedCostCents: estimateMutation.data?.estimatedCostCents ?? Math.max(300, prompt.length * 2),
-        actualCostCents: null,
-        requiresSecondConfirm: Boolean(estimateMutation.data?.requiresSecondConfirm),
-        resultAssetId: null,
-        errorMessage: null,
-        createdAt: now,
-        updatedAt: now
-      };
-    },
+        secondConfirmToken: input.secondConfirmToken,
+        fallbackEstimate: input.estimate
+      }),
     onSuccess(task) {
       addTask(task);
+      setConfirmEstimate(null);
     }
   });
 
   const estimate = estimateMutation.data;
   const costCents = estimate?.estimatedCostCents ?? Math.max(300, prompt.length * 2);
   const showSecondConfirm = Boolean(estimate?.requiresSecondConfirm) || costCents >= 2_000;
+  const estimatedSeconds = estimate?.estimatedSeconds ?? parameters.durationSeconds * 6;
+  const confirmCostCents = confirmEstimate?.estimatedCostCents ?? costCents;
+
+  async function estimateCurrentPrompt() {
+    return estimateMutation.mutateAsync({ projectId, promptText: prompt, assetRefs, parameters });
+  }
+
+  async function handleGenerate() {
+    const nextEstimate = await estimateCurrentPrompt();
+    if (nextEstimate.requiresSecondConfirm) {
+      setConfirmEstimate(nextEstimate);
+      return;
+    }
+    createMutation.mutate({ estimate: nextEstimate });
+  }
+
+  function confirmHighCostGeneration() {
+    if (!confirmEstimate?.secondConfirmToken) return;
+    createMutation.mutate({ estimate: confirmEstimate, secondConfirmToken: confirmEstimate.secondConfirmToken });
+  }
 
   return (
     <div className="px-4 py-3">
@@ -83,6 +99,7 @@ export function GenerationComposer() {
           <div className="rounded-card border border-border bg-background/60 p-3">
             <p className="text-xs font-medium uppercase text-muted-foreground">预计费用</p>
             <p className="mt-2 text-2xl font-semibold text-warning">¥{(costCents / 100).toFixed(2)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">预计等待 {estimatedSeconds} 秒</p>
             {showSecondConfirm ? (
               <p className="mt-2 flex items-start gap-2 text-sm leading-5 text-warning">
                 <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -117,8 +134,8 @@ export function GenerationComposer() {
               type="button"
               className="size-10 rounded-full px-0"
               aria-label="生成"
-              onClick={() => createMutation.mutate()}
-              disabled={prompt.trim().length === 0 || createMutation.isPending}
+              onClick={handleGenerate}
+              disabled={prompt.trim().length === 0 || createMutation.isPending || estimateMutation.isPending}
             >
               <SendHorizontal className="-rotate-90 size-4" aria-hidden="true" />
             </Button>
@@ -126,6 +143,26 @@ export function GenerationComposer() {
           <span className="sr-only">{credentialId}</span>
         </div>
       </div>
+      <Dialog open={confirmEstimate !== null} title="确认高费用生成" onOpenChange={(open) => !open && setConfirmEstimate(null)}>
+        <DialogHeader>
+          <div>
+            <DialogTitle>确认高费用生成</DialogTitle>
+            <DialogDescription>本次预计 ¥{(confirmCostCents / 100).toFixed(2)}。确认后创建任务。</DialogDescription>
+          </div>
+          <DialogCloseButton onClose={() => setConfirmEstimate(null)} />
+        </DialogHeader>
+        <div className="rounded-card border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+          系统会使用当前模型、分辨率和时长生成视频。
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={() => setConfirmEstimate(null)}>
+            取消
+          </Button>
+          <Button type="button" onClick={confirmHighCostGeneration} disabled={!confirmEstimate?.secondConfirmToken || createMutation.isPending}>
+            确认生成
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

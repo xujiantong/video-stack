@@ -9,7 +9,10 @@ const uploadParamsSchema = z.object({
 
 export function createAssetRoutes(service: AssetService): FastifyPluginAsync {
   return async (app) => {
-    app.addContentTypeParser("*", { parseAs: "buffer" }, (_request, body, done) => {
+    app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_request, body, done) => {
+      done(null, body);
+    });
+    app.addContentTypeParser(/^(image|audio|video)\//, { parseAs: "buffer" }, (_request, body, done) => {
       done(null, body);
     });
 
@@ -46,7 +49,15 @@ export function createAssetRoutes(service: AssetService): FastifyPluginAsync {
       try {
         const { storageKey } = uploadParamsSchema.parse(request.params);
         const body = request.body;
-        const bytes = Buffer.isBuffer(body) ? body : Buffer.from(String(body ?? ""));
+        if (!Buffer.isBuffer(body)) {
+          return reply.code(400).send({
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "无效的上传内容，请重新选择文件上传。"
+            }
+          });
+        }
+        const bytes = body;
         await service.acceptLocalUpload(decodeURIComponent(storageKey), bytes);
         return reply.code(200).send({ ok: true });
       } catch (error) {

@@ -25,11 +25,11 @@ function createLocalStorageService(env: StudioEnv): StorageService {
 
   return {
     bucket,
-    async createUpload(storageKey) {
+    async createUpload(storageKey, mimeType) {
       const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
       return {
         url: `/api/assets/uploads/${encodeURIComponent(storageKey)}`,
-        headers: {},
+        headers: { "Content-Type": mimeType },
         expiresAt
       };
     },
@@ -39,12 +39,21 @@ function createLocalStorageService(env: StudioEnv): StorageService {
   };
 }
 
-function requireS3Env(env: StudioEnv): Required<Pick<StudioEnv, "STUDIO_S3_ENDPOINT" | "STUDIO_S3_ACCESS_KEY_ID" | "STUDIO_S3_SECRET_ACCESS_KEY">> {
+type RequiredS3Env = {
+  STUDIO_S3_ENDPOINT: string;
+  STUDIO_S3_REGION: string;
+  STUDIO_S3_ACCESS_KEY_ID: string;
+  STUDIO_S3_SECRET_ACCESS_KEY: string;
+};
+
+function requireS3Env(env: StudioEnv): RequiredS3Env {
   if (!env.STUDIO_S3_ENDPOINT) throw new Error("缺少 STUDIO_S3_ENDPOINT，请配置对象存储 Endpoint。");
+  if (!env.STUDIO_S3_REGION) throw new Error("缺少 STUDIO_S3_REGION，请配置对象存储 Region。");
   if (!env.STUDIO_S3_ACCESS_KEY_ID) throw new Error("缺少 STUDIO_S3_ACCESS_KEY_ID，请配置对象存储 Access Key。");
   if (!env.STUDIO_S3_SECRET_ACCESS_KEY) throw new Error("缺少 STUDIO_S3_SECRET_ACCESS_KEY，请配置对象存储 Secret Key。");
   return {
     STUDIO_S3_ENDPOINT: env.STUDIO_S3_ENDPOINT,
+    STUDIO_S3_REGION: env.STUDIO_S3_REGION,
     STUDIO_S3_ACCESS_KEY_ID: env.STUDIO_S3_ACCESS_KEY_ID,
     STUDIO_S3_SECRET_ACCESS_KEY: env.STUDIO_S3_SECRET_ACCESS_KEY
   };
@@ -52,7 +61,7 @@ function requireS3Env(env: StudioEnv): Required<Pick<StudioEnv, "STUDIO_S3_ENDPO
 
 function createS3StorageService(env: StudioEnv): StorageService {
   const bucket = env.STUDIO_STORAGE_BUCKET;
-  const { STUDIO_S3_ENDPOINT, STUDIO_S3_ACCESS_KEY_ID, STUDIO_S3_SECRET_ACCESS_KEY } = requireS3Env(env);
+  const { STUDIO_S3_ENDPOINT, STUDIO_S3_REGION, STUDIO_S3_ACCESS_KEY_ID, STUDIO_S3_SECRET_ACCESS_KEY } = requireS3Env(env);
 
   return {
     bucket,
@@ -61,7 +70,7 @@ function createS3StorageService(env: StudioEnv): StorageService {
       const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
 
       const client = new S3Client({
-        region: env.STUDIO_S3_REGION,
+        region: STUDIO_S3_REGION,
         endpoint: STUDIO_S3_ENDPOINT,
         forcePathStyle: true,
         credentials: {
@@ -87,4 +96,3 @@ function createS3StorageService(env: StudioEnv): StorageService {
     }
   };
 }
-

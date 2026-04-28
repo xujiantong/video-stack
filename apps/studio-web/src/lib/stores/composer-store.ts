@@ -22,6 +22,7 @@ type ComposerState = {
   setPrompt(prompt: string): void;
   upsertAsset(asset: StudioAsset): void;
   setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
+  removeAsset(assetId: string): void;
   addTask(task: GenerationTask): void;
 };
 
@@ -145,14 +146,22 @@ export const useComposerStore = create<ComposerState>((set) => ({
     set((state) => ({
       assets: state.assets.map((asset) =>
         asset.id === assetId
-          ? {
-              ...asset,
-              status,
-              uploadError: status === "failed" ? uploadError ?? "上传失败，请重试。" : undefined
-            }
+          ? status === "failed"
+            ? {
+                ...asset,
+                status,
+                uploadError: uploadError ?? "上传失败，请重试。"
+              }
+            : (() => {
+                const { uploadError: _uploadError, ...rest } = asset;
+                return { ...rest, status };
+              })()
           : asset
       )
     }));
+  },
+  removeAsset(assetId) {
+    set((state) => ({ assets: state.assets.filter((asset) => asset.id !== assetId) }));
   },
   addTask(task) {
     set((state) => ({ tasks: [task, ...state.tasks] }));

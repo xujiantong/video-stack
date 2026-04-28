@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_UPLOAD_BYTES } from "../constants";
-import { assetMentionSchema, assetSchema, createAssetUploadRequestSchema } from "./assets";
+import { assetMentionSchema, assetSchema, createAssetUploadRequestSchema, createAssetUploadResponseSchema } from "./assets";
 
 const projectId = "00000000-0000-4000-8000-000000000001";
 const assetId = "00000000-0000-4000-8000-000000000101";
@@ -29,6 +29,28 @@ describe("asset schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts local upload paths and remote presigned URLs", () => {
+    const baseResponse = {
+      assetId,
+      uploadHeaders: {},
+      storageKey: `${projectId}/assets/${assetId}/demo.png`,
+      expiresAt: now
+    };
+
+    expect(
+      createAssetUploadResponseSchema.safeParse({
+        ...baseResponse,
+        uploadUrl: `/api/assets/uploads/${encodeURIComponent(baseResponse.storageKey)}`
+      }).success
+    ).toBe(true);
+    expect(
+      createAssetUploadResponseSchema.safeParse({
+        ...baseResponse,
+        uploadUrl: "https://objects.example.com/studio-assets/demo.png"
+      }).success
+    ).toBe(true);
   });
 
   it("validates persisted asset records and asset references", () => {

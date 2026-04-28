@@ -62,6 +62,7 @@ describe("asset routes", () => {
     const uploadResponse = await app.inject({
       method: "PUT",
       url: presignBody.uploadUrl,
+      headers: { "content-type": "image/png" },
       payload: Buffer.from("hello")
     });
     expect(uploadResponse.statusCode).toBe(200);
@@ -83,4 +84,3 @@ describe("asset routes", () => {
     expect(asset.storageKey).toBe(presignBody.storageKey);
   });
 });
-

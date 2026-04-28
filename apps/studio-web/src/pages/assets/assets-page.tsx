@@ -42,14 +42,15 @@ export function AssetsPage() {
   const tasks = useComposerStore((state) => state.tasks);
   const upsertAsset = useComposerStore((state) => state.upsertAsset);
   const setAssetStatus = useComposerStore((state) => state.setAssetStatus);
+  const removeAsset = useComposerStore((state) => state.removeAsset);
   const selectedTask = tasks[0];
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [retryFiles, setRetryFiles] = useState<Record<string, File>>({});
   const projectId = useMemo(() => tasks[0]?.projectId ?? "00000000-0000-4000-8000-000000000001", [tasks]);
 
-  async function uploadOne(file: File, existingAssetId?: string) {
+  async function uploadOne(file: File): Promise<string | null> {
     const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-    let nextAssetId = existingAssetId;
+    let nextAssetId: string | null = null;
     try {
       const presign = await presignAssetUpload({
         projectId,
@@ -70,22 +71,25 @@ export function AssetsPage() {
         references: 0,
         createdAt: "刚刚",
         status: "uploading",
-        previewUrl
+        ...(previewUrl ? { previewUrl } : {})
       });
 
       await uploadAssetBytes(presign.uploadUrl, presign.uploadHeaders, file);
       await completeAssetUpload({ assetId: presign.assetId, projectId, storageKey: presign.storageKey });
       setAssetStatus(presign.assetId, "ready");
+      return presign.assetId;
     } catch (error) {
       if (nextAssetId) {
         setAssetStatus(nextAssetId, "failed", error instanceof Error ? error.message : "上传失败，请重试。");
       }
+      return null;
     }
   }
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const first = files[0];
+    const first = files.item(0);
+    if (!first) return;
     await uploadOne(first);
   }
 
@@ -173,7 +177,10 @@ export function AssetsPage() {
                                   fileInputRef.current?.click();
                                   return;
                                 }
-                                void uploadOne(file, asset.id);
+                                void (async () => {
+                                  const nextId = await uploadOne(file);
+                                  if (nextId) removeAsset(asset.id);
+                                })();
                               }}
                               type="button"
                               variant="ghost"

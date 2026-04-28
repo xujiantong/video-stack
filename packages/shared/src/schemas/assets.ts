@@ -56,7 +56,7 @@ export const createAssetUploadRequestSchema = z.object({
 
 export const createAssetUploadResponseSchema = z.object({
   assetId: z.string().uuid(),
-  uploadUrl: z.string().url(),
+  uploadUrl: z.union([z.string().url(), z.string().regex(/^\/\S*$/, "上传地址必须是 URL 或站内路径。")]),
   uploadHeaders: z.record(z.string()),
   storageKey: z.string().min(1),
   expiresAt: z.string().datetime()

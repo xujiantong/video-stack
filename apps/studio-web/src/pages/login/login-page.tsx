@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { AlertCircle, KeyRound, LoaderCircle, Lock, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type LoginMode = "password" | "api-key";
 type SubmitState = "idle" | "submitting" | "failed";
@@ -79,7 +80,10 @@ export function LoginPage() {
             <div className="flex rounded-button border border-border bg-background p-1" role="tablist" aria-label="登录方式">
               <button
                 aria-selected={mode === "password"}
-                className={`flex-1 rounded-button px-3 py-2 text-sm transition ${mode === "password" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                className={cn(
+                  "flex-1 rounded-button px-3 py-2 text-sm transition",
+                  mode === "password" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
                 role="tab"
                 type="button"
                 onClick={() => selectMode("password")}
@@ -88,7 +92,10 @@ export function LoginPage() {
               </button>
               <button
                 aria-selected={mode === "api-key"}
-                className={`flex-1 rounded-button px-3 py-2 text-sm transition ${mode === "api-key" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                className={cn(
+                  "flex-1 rounded-button px-3 py-2 text-sm transition",
+                  mode === "api-key" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
                 role="tab"
                 type="button"
                 onClick={() => selectMode("api-key")}

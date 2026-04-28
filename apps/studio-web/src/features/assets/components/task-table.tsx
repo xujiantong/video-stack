@@ -3,6 +3,7 @@ import type { GenerationTask } from "@video-stack/shared";
 import { StatusBadge } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { IconAction } from "./icon-action";
 
 export function TaskTable({
@@ -34,7 +35,7 @@ export function TaskTable({
       </TableHeader>
       <TableBody>
         {tasks.map((task) => (
-          <TableRow key={task.id} className={selectedTaskId === task.id ? "bg-muted/45" : undefined}>
+          <TableRow key={task.id} className={cn(selectedTaskId === task.id && "bg-muted/45")}>
             <TableCell className="max-w-72">
               <span className="line-clamp-1">{task.promptText}</span>
             </TableCell>

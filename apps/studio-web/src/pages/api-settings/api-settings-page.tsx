@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteCredential, listCredentials, saveCredential, testCredential } from "@/lib/api/credentials-api";
+import { cn } from "@/lib/utils";
 
 const credentialsQueryKey = ["provider-credentials"] as const;
 
@@ -148,9 +149,10 @@ export function ApiSettingsPage() {
           </div>
           {message ? (
             <p
-              className={`rounded-card border p-3 text-sm ${
-                message.tone === "error" ? "border-danger/40 bg-danger/10 text-foreground" : "border-border bg-muted text-foreground"
-              }`}
+              className={cn(
+                "rounded-card border p-3 text-sm text-foreground",
+                message.tone === "error" ? "border-danger/40 bg-danger/10" : "border-border bg-muted"
+              )}
               role={message.tone === "error" ? "alert" : "status"}
             >
               {message.text}

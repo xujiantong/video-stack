@@ -1,5 +1,12 @@
 import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { ASSET_KINDS, ASSET_STATUSES, GENERATION_STATUSES, PROVIDERS, type AssetMention } from "@video-stack/shared";
+import {
+  ASSET_KINDS,
+  ASSET_STATUSES,
+  GENERATION_STATUSES,
+  PROVIDERS,
+  type AssetMention,
+  type GenerationParameters
+} from "@video-stack/shared";
 
 export const providerEnum = pgEnum("studio_provider", PROVIDERS);
 export const userStatus = pgEnum("user_status", ["active", "disabled", "deleted"]);
@@ -110,6 +117,7 @@ export const generationTasks = pgTable(
     provider: providerEnum("provider").notNull(),
     promptDoc: jsonb("prompt_doc").$type<Record<string, unknown>>().notNull(),
     promptText: text("prompt_text").notNull(),
+    parameters: jsonb("parameters").$type<GenerationParameters>(),
     assetRefs: jsonb("asset_refs").$type<AssetMention[]>().notNull(),
     status: generationStatus("status").notNull().default("draft"),
     estimatedCostCents: integer("estimated_cost_cents").notNull(),

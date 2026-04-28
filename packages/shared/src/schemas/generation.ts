@@ -39,6 +39,14 @@ export const regenerateGenerationRequestSchema = createGenerationRequestSchema.e
   secondConfirmToken: z.string().min(SECOND_CONFIRM_TOKEN_MIN_LENGTH)
 });
 
+export const listGenerationTasksQuerySchema = z.object({
+  projectId: z.string().uuid()
+});
+
+export const generationTaskParamsSchema = z.object({
+  taskId: z.string().uuid()
+});
+
 export const generationTaskSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
@@ -78,5 +86,6 @@ export type EstimateGenerationRequest = z.infer<typeof estimateGenerationRequest
 export type EstimateGenerationResponse = z.infer<typeof estimateGenerationResponseSchema>;
 export type CreateGenerationRequest = z.infer<typeof createGenerationRequestSchema>;
 export type RegenerateGenerationRequest = z.infer<typeof regenerateGenerationRequestSchema>;
+export type ListGenerationTasksQuery = z.infer<typeof listGenerationTasksQuerySchema>;
 export type GenerationTask = z.infer<typeof generationTaskSchema>;
 export type GenerationJobPayload = z.infer<typeof generationJobPayloadSchema>;

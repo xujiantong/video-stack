@@ -1,5 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import type { AssetMention, ErrorCode, Provider } from "@video-stack/shared";
+import type { AssetMention, ErrorCode, GenerationParameters, Provider } from "@video-stack/shared";
 import { assets, generationTasks, projects, providerCredentials, users } from "./schema";
 
 export type UserRecord = InferSelectModel<typeof users>;
@@ -53,6 +53,7 @@ type CreateGenerationTaskInput = {
   provider: Provider;
   promptDoc: Record<string, unknown>;
   promptText: string;
+  parameters?: GenerationParameters;
   assetRefs: AssetMention[];
   estimatedCostCents: number;
   id?: string;
@@ -74,6 +75,9 @@ export type StudioRepository = {
   getProviderCredential(credentialId: string): Promise<ProviderCredentialRecord>;
   revokeProviderCredential(credentialId: string): Promise<ProviderCredentialRecord>;
   createGenerationTask(input: CreateGenerationTaskInput): Promise<GenerationTaskRecord>;
+  getGenerationTask(taskId: string): Promise<GenerationTaskRecord>;
+  listGenerationTasks(projectId: string): Promise<GenerationTaskRecord[]>;
+  cancelGenerationTask(taskId: string): Promise<GenerationTaskRecord>;
   softDeleteAsset(assetId: string): Promise<AssetRecord>;
   markGenerationTaskFailed(taskId: string, errorCode: ErrorCode, errorMessage: string): Promise<GenerationTaskRecord>;
   markGenerationTaskSucceeded(taskId: string, resultAssetId: string, actualCostCents: number): Promise<GenerationTaskRecord>;
@@ -89,7 +93,7 @@ function notFound(entity: string, id: string): Error {
 }
 
 export function createInMemoryStudioRepository(options: RepositoryOptions = {}): StudioRepository {
-  const idFactory = options.idFactory ?? crypto.randomUUID;
+  const idFactory = options.idFactory ?? (() => crypto.randomUUID());
   const now = options.now ?? (() => new Date());
   const userRows = new Map<string, UserRecord>();
   const projectRows = new Map<string, ProjectRecord>();
@@ -239,6 +243,7 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
         provider: input.provider,
         promptDoc: input.promptDoc,
         promptText: input.promptText,
+        parameters: input.parameters ?? null,
         assetRefs: input.assetRefs,
         status: input.status ?? "draft",
         estimatedCostCents: input.estimatedCostCents,
@@ -256,6 +261,33 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
       };
       taskRows.set(row.id, row);
       return row;
+    },
+    async getGenerationTask(taskId) {
+      const row = taskRows.get(taskId);
+      if (!row || row.deletedAt !== null) throw notFound("任务", taskId);
+      return row;
+    },
+    async listGenerationTasks(projectId) {
+      if (!projectRows.has(projectId)) throw notFound("项目", projectId);
+      return [...taskRows.values()]
+        .filter((row) => row.projectId === projectId && row.deletedAt === null)
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    },
+    async cancelGenerationTask(taskId) {
+      const row = taskRows.get(taskId);
+      if (!row || row.deletedAt !== null) throw notFound("任务", taskId);
+      if (row.status !== "queued" && row.status !== "running") {
+        throw new Error("GENERATION_TASK_NOT_CANCELABLE");
+      }
+      const updatedAt = now();
+      const updated: GenerationTaskRecord = {
+        ...row,
+        status: "canceled",
+        updatedAt,
+        finishedAt: updatedAt
+      };
+      taskRows.set(taskId, updated);
+      return updated;
     },
     async softDeleteAsset(assetId) {
       const row = assetRows.get(assetId);

@@ -16,6 +16,7 @@
     "@aws-sdk/s3-request-presigner": "^3.888.0",
     "@fastify/cors": "^10.0.2",
     "@video-stack/shared": "workspace:*",
+    "bullmq": "^5.34.2",
     "drizzle-orm": "^0.38.3",
     "fastify": "^5.1.0",
     "zod": "^3.24.1"

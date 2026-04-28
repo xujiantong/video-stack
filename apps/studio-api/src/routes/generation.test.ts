@@ -1,59 +1,158 @@
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
-import { generationRoutes } from "./generation";
+import { createInMemoryStudioRepository } from "../db/repositories";
+import { createInMemoryGenerationQueue } from "../queue/generation-queue";
+import { createGenerationRoutes } from "./generation";
+
+const userId = "00000000-0000-4000-8000-000000000501";
+const projectId = "00000000-0000-4000-8000-000000000001";
+const credentialId = "00000000-0000-4000-8000-000000000401";
+const readyAssetId = "00000000-0000-4000-8000-000000000101";
+const uploadingAssetId = "00000000-0000-4000-8000-000000000102";
 
 const baseRequest = {
-  projectId: "00000000-0000-4000-8000-000000000001",
+  projectId,
   provider: "jimeng",
-  promptText: "高成本生成".repeat(300),
+  promptText: "生成 8 秒产品展示视频",
   assetRefs: [],
-  credentialId: "00000000-0000-4000-8000-000000000401",
+  credentialId,
+  promptDoc: { type: "doc", content: [] },
   parameters: {
-    modelId: "seedance-pro",
+    modelId: "seedance-lite",
     mode: "text_to_video",
     referenceMode: "none",
     aspectRatio: "16:9",
-    resolution: "1080p",
-    durationSeconds: 15
+    resolution: "720p",
+    durationSeconds: 5
   }
 } as const;
 
 async function buildApp() {
+  const repository = createInMemoryStudioRepository();
+  const queue = createInMemoryGenerationQueue();
+  await repository.createUser({ email: "creator@example.com", id: userId });
+  await repository.createProject({ name: "影栈 Studio", userId, id: projectId });
+  await repository.createProviderCredential({
+    id: credentialId,
+    userId,
+    provider: "jimeng",
+    displayName: "即梦主账号",
+    encryptedSecret: "ciphertext",
+    iv: "iviviviviviv",
+    authTag: "authtagauthtag12",
+    maskedLabel: "sk-****-8F2A"
+  });
+  await repository.createAsset({
+    id: readyAssetId,
+    projectId,
+    userId,
+    kind: "image",
+    mimeType: "image/png",
+    name: "包装主图",
+    sizeBytes: 2048,
+    tosKey: "assets/main.png",
+    status: "ready"
+  });
+  await repository.createAsset({
+    id: uploadingAssetId,
+    projectId,
+    userId,
+    kind: "image",
+    mimeType: "image/png",
+    name: "上传中的主图",
+    sizeBytes: 2048,
+    tosKey: "assets/uploading.png",
+    status: "uploading"
+  });
+
   const app = Fastify();
-  await app.register(generationRoutes, { prefix: "/api" });
-  return app;
+  await app.register(createGenerationRoutes({ repository, queue, userId, secondConfirmSecret: "test-secret" }), { prefix: "/api" });
+  return { app, queue };
 }
 
 describe("generation routes", () => {
-  it("returns a confirmation token for high cost estimates", async () => {
-    const app = await buildApp();
+  it("creates, lists, reads, and cancels a queued task", async () => {
+    const { app, queue } = await buildApp();
 
-    const response = await app.inject({
+    const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generation/estimate",
-      payload: baseRequest
+      url: "/api/generation/tasks",
+      payload: {
+        ...baseRequest,
+        assetRefs: [{ id: readyAssetId, kind: "image", label: "包装主图" }],
+        parameters: {
+          ...baseRequest.parameters,
+          mode: "image_to_video",
+          referenceMode: "image"
+        }
+      }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+    expect(created).toEqual(
+      expect.objectContaining({
+        projectId,
+        status: "queued",
+        requiresSecondConfirm: false
+      })
+    );
+    expect(queue.jobs).toEqual([expect.objectContaining({ taskId: created.id, projectId, userId, provider: "jimeng" })]);
+
+    const listResponse = await app.inject({ method: "GET", url: `/api/generation/tasks?projectId=${projectId}` });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([expect.objectContaining({ id: created.id })]);
+
+    const detailResponse = await app.inject({ method: "GET", url: `/api/generation/tasks/${created.id}` });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "queued" }));
+
+    const cancelResponse = await app.inject({ method: "POST", url: `/api/generation/tasks/${created.id}/cancel` });
+    expect(cancelResponse.statusCode).toBe(200);
+    expect(cancelResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "canceled" }));
+
+    const canonicalListResponse = await app.inject({ method: "GET", url: `/api/projects/${projectId}/generations` });
+    expect(canonicalListResponse.statusCode).toBe(200);
+    expect(canonicalListResponse.json()).toEqual([expect.objectContaining({ id: created.id, status: "canceled" })]);
+  });
+
+  it("returns a confirmation token and rejects high cost creation without it", async () => {
+    const { app } = await buildApp();
+    const highCostRequest = {
+      ...baseRequest,
+      promptText: "高成本生成".repeat(300),
+      parameters: {
+        modelId: "seedance-pro",
+        mode: "text_to_video",
+        referenceMode: "none",
+        aspectRatio: "16:9",
+        resolution: "1080p",
+        durationSeconds: 15
+      }
+    } as const;
+
+    const estimateResponse = await app.inject({
+      method: "POST",
+      url: "/api/generations/estimate",
+      payload: highCostRequest
+    });
+
+    expect(estimateResponse.statusCode).toBe(200);
+    expect(estimateResponse.json()).toEqual(
       expect.objectContaining({
         requiresSecondConfirm: true,
         secondConfirmToken: expect.any(String)
       })
     );
-  });
 
-  it("rejects high cost task creation without a confirmation token", async () => {
-    const app = await buildApp();
-
-    const response = await app.inject({
+    const createResponse = await app.inject({
       method: "POST",
-      url: "/api/generation/tasks",
-      payload: { ...baseRequest, promptDoc: { type: "doc" } }
+      url: "/api/generations",
+      payload: highCostRequest
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual(
+    expect(createResponse.statusCode).toBe(400);
+    expect(createResponse.json()).toEqual(
       expect.objectContaining({
         error: expect.objectContaining({
           code: "GENERATION_HIGH_COST_CONFIRM_REQUIRED"
@@ -62,26 +161,83 @@ describe("generation routes", () => {
     );
   });
 
-  it("creates a high cost task after confirmation", async () => {
-    const app = await buildApp();
+  it("creates and regenerates high cost tasks with a valid confirmation token", async () => {
+    const { app, queue } = await buildApp();
+    const highCostRequest = {
+      ...baseRequest,
+      promptText: "高成本生成".repeat(300),
+      parameters: {
+        modelId: "seedance-pro",
+        mode: "text_to_video",
+        referenceMode: "none",
+        aspectRatio: "16:9",
+        resolution: "1080p",
+        durationSeconds: 15
+      }
+    } as const;
+    const estimate = await app.inject({ method: "POST", url: "/api/generation/estimate", payload: highCostRequest });
+    const secondConfirmToken = estimate.json().secondConfirmToken;
 
-    const response = await app.inject({
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: { ...highCostRequest, secondConfirmToken }
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const created = createResponse.json();
+    expect(created).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: true }));
+
+    const regenerateResponse = await app.inject({
+      method: "POST",
+      url: `/api/generation/tasks/${created.id}/regenerate`,
+      payload: { ...highCostRequest, secondConfirmToken }
+    });
+
+    expect(regenerateResponse.statusCode).toBe(201);
+    expect(regenerateResponse.json()).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: true }));
+    expect(queue.jobs).toHaveLength(2);
+  });
+
+  it("uses unified errors for unsupported capabilities, missing credentials, and unavailable assets", async () => {
+    const { app } = await buildApp();
+
+    const unsupportedResponse = await app.inject({
       method: "POST",
       url: "/api/generation/tasks",
       payload: {
         ...baseRequest,
-        promptDoc: { type: "doc" },
-        secondConfirmToken: "confirmed-high-cost"
+        parameters: {
+          ...baseRequest.parameters,
+          aspectRatio: "4:3"
+        }
       }
     });
+    expect(unsupportedResponse.statusCode).toBe(400);
+    expect(unsupportedResponse.json()).toEqual(expect.objectContaining({ error: expect.objectContaining({ code: "MODEL_UNSUPPORTED_PARAMETER" }) }));
 
-    expect(response.statusCode).toBe(201);
-    expect(response.json()).toEqual(
-      expect.objectContaining({
-        status: "queued",
-        requiresSecondConfirm: true,
-        estimatedCostCents: expect.any(Number)
-      })
-    );
+    const credentialResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: { ...baseRequest, credentialId: "00000000-0000-4000-8000-000000000499" }
+    });
+    expect(credentialResponse.statusCode).toBe(404);
+    expect(credentialResponse.json()).toEqual(expect.objectContaining({ error: expect.objectContaining({ code: "NOT_FOUND" }) }));
+
+    const assetResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: {
+        ...baseRequest,
+        assetRefs: [{ id: uploadingAssetId, kind: "image", label: "上传中的主图" }],
+        parameters: {
+          ...baseRequest.parameters,
+          mode: "image_to_video",
+          referenceMode: "image"
+        }
+      }
+    });
+    expect(assetResponse.statusCode).toBe(400);
+    expect(assetResponse.json()).toEqual(expect.objectContaining({ error: expect.objectContaining({ code: "ASSET_NOT_READY" }) }));
   });
 });

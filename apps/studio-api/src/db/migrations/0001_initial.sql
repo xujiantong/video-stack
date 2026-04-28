@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
   provider studio_provider NOT NULL,
   prompt_doc jsonb NOT NULL,
   prompt_text text NOT NULL,
+  parameters jsonb,
   asset_refs jsonb NOT NULL,
   status generation_status NOT NULL DEFAULT 'draft',
   estimated_cost_cents integer NOT NULL,

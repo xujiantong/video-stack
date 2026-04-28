@@ -19,3 +19,55 @@ test("user can switch asset and task tables", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "任务列表" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "复制参数" }).first()).toBeVisible();
 });
+
+test("user can save and test masked API credentials", async ({ page }) => {
+  let credentials: Array<{ createdAt: string; defaultModelId: null; displayName: string; id: string; maskedLabel: string; provider: "jimeng"; serviceRegion: null; updatedAt: string }> = [];
+
+  await page.route("**/api/provider-credentials", async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      await route.fulfill({ contentType: "application/json", json: credentials });
+      return;
+    }
+
+    const body = request.postDataJSON() as { displayName: string; secretKey: string };
+    expect(body.secretKey).toBe("sk_secret_8f2a");
+    credentials = [
+      {
+        id: "00000000-0000-4000-8000-000000000401",
+        provider: "jimeng",
+        displayName: body.displayName,
+        maskedLabel: "sk-****-8F2A",
+        serviceRegion: null,
+        defaultModelId: null,
+        createdAt: "2026-04-28T07:45:31.309Z",
+        updatedAt: "2026-04-28T07:45:31.309Z"
+      }
+    ];
+    await route.fulfill({ contentType: "application/json", json: credentials[0], status: 201 });
+  });
+  await page.route("**/api/provider-credentials/*/test", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        credentialId: "00000000-0000-4000-8000-000000000401",
+        ok: true,
+        checkedAt: "2026-04-28T07:45:31.309Z",
+        message: "凭证已保存并可解密。真实连通性将在接入即梦 Provider 后检测。"
+      }
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { exact: true, name: "API" }).click();
+  await page.getByPlaceholder("提交后前端会清空").fill("ak_demo");
+  await page.getByPlaceholder("提交后不再明文展示").fill("sk_secret_8f2a");
+  await page.getByRole("button", { name: "保存凭证" }).click();
+
+  await expect(page.getByText("凭证已保存。前端已清空 API Key 和 Secret Key。")).toBeVisible();
+  await expect(page.getByText("sk-****-8F2A")).toBeVisible();
+  await expect(page.getByText("sk_secret_8f2a")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "检测连接" }).click();
+  await expect(page.getByText("凭证已保存并可解密。真实连通性将在接入即梦 Provider 后检测。")).toBeVisible();
+});

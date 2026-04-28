@@ -66,6 +66,9 @@ export type StudioRepository = {
   createProject(input: CreateProjectInput): Promise<ProjectRecord>;
   createAsset(input: CreateAssetInput): Promise<AssetRecord>;
   createProviderCredential(input: CreateProviderCredentialInput): Promise<ProviderCredentialRecord>;
+  listProviderCredentials(userId: string): Promise<ProviderCredentialRecord[]>;
+  getProviderCredential(credentialId: string): Promise<ProviderCredentialRecord>;
+  revokeProviderCredential(credentialId: string): Promise<ProviderCredentialRecord>;
   createGenerationTask(input: CreateGenerationTaskInput): Promise<GenerationTaskRecord>;
   softDeleteAsset(assetId: string): Promise<AssetRecord>;
   markGenerationTaskFailed(taskId: string, errorCode: ErrorCode, errorMessage: string): Promise<GenerationTaskRecord>;
@@ -161,6 +164,30 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
       };
       credentialRows.set(row.id, row);
       return row;
+    },
+    async listProviderCredentials(userId) {
+      if (!userRows.has(userId)) throw notFound("用户", userId);
+      return [...credentialRows.values()]
+        .filter((row) => row.userId === userId && row.status === "active" && row.deletedAt === null)
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    },
+    async getProviderCredential(credentialId) {
+      const row = credentialRows.get(credentialId);
+      if (!row || row.status !== "active" || row.deletedAt !== null) throw notFound("凭证", credentialId);
+      return row;
+    },
+    async revokeProviderCredential(credentialId) {
+      const row = credentialRows.get(credentialId);
+      if (!row || row.status !== "active" || row.deletedAt !== null) throw notFound("凭证", credentialId);
+      const revokedAt = now();
+      const updated: ProviderCredentialRecord = {
+        ...row,
+        status: "deleted",
+        updatedAt: revokedAt,
+        deletedAt: revokedAt
+      };
+      credentialRows.set(credentialId, updated);
+      return updated;
     },
     async createGenerationTask(input) {
       if (!projectRows.has(input.projectId)) throw notFound("项目", input.projectId);

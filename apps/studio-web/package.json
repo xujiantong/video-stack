@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "e2e": "playwright test",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
@@ -23,6 +24,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",

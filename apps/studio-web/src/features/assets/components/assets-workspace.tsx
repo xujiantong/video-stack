@@ -82,7 +82,13 @@ function AssetsToolbar({
       <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
         <label className="relative min-w-60 max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input className="pl-9" value={searchText} onChange={(event) => onSearchTextChange(event.target.value)} placeholder="搜索资产或任务" />
+          <Input
+            aria-label="搜索资产或任务"
+            className="pl-9"
+            value={searchText}
+            onChange={(event) => onSearchTextChange(event.target.value)}
+            placeholder="搜索资产或任务"
+          />
         </label>
         {activeTab === "assets" ? (
           <select
@@ -455,6 +461,7 @@ export function AssetsWorkspace() {
           taskFilter={taskFilter}
         />
         <input
+          aria-label="选择上传素材"
           accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav"
           className="hidden"
           onChange={(event) => {

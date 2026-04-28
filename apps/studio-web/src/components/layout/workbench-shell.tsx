@@ -36,6 +36,7 @@ export function WorkbenchShell({
             const active = view === item.id;
             return (
               <button
+                aria-current={active ? "page" : undefined}
                 aria-label={item.label}
                 className={cn(
                   "group flex w-14 flex-col items-center gap-1 rounded-button px-2 py-2 text-[11px] text-muted-foreground transition",
@@ -56,7 +57,9 @@ export function WorkbenchShell({
       </aside>
       <main className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden">
         {topbar}
-        <section className="studio-scrollbar min-h-0 overflow-auto">{content}</section>
+        <section aria-label="工作区内容" className="studio-scrollbar min-h-0 overflow-auto">
+          {content}
+        </section>
         <footer className="border-t border-border bg-card/95">{composer}</footer>
       </main>
     </div>

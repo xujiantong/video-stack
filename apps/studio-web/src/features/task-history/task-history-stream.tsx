@@ -5,6 +5,7 @@ import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { generationTaskKey, generationTasksKey, getGenerationTask, listGenerationTasks } from "@/lib/api/generation-api";
+import { cn } from "@/lib/utils";
 
 const taskPollIntervalMs = 1_500;
 
@@ -32,7 +33,19 @@ function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
   return tasks?.some((task) => isActiveTask(task.status)) ?? false;
 }
 
-function TaskHistoryCard({ pollIntervalMs, task }: { pollIntervalMs: number; task: GenerationTask }) {
+function TaskHistoryCard({
+  compact = false,
+  onFocus,
+  pollIntervalMs,
+  selected = false,
+  task
+}: {
+  compact?: boolean;
+  onFocus?: ((task: GenerationTask) => void) | undefined;
+  pollIntervalMs: number;
+  selected?: boolean;
+  task: GenerationTask;
+}) {
   const detailQuery = useQuery({
     queryKey: generationTaskKey(task.id),
     queryFn: () => getGenerationTask(task.id),
@@ -46,7 +59,12 @@ function TaskHistoryCard({ pollIntervalMs, task }: { pollIntervalMs: number; tas
   const failureMessage = currentTask.errorMessage ? `${currentTask.errorMessage} 请调整参数后重试。` : null;
 
   return (
-    <article className="overflow-hidden rounded-card border border-border bg-surface">
+    <article
+      className={cn(
+        "overflow-hidden rounded-card border bg-surface transition",
+        selected ? "border-primary/60 shadow-primary-ring" : "border-border hover:border-primary/30"
+      )}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-3">
         <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
           <span className="flex -space-x-2">
@@ -67,8 +85,13 @@ function TaskHistoryCard({ pollIntervalMs, task }: { pollIntervalMs: number; tas
           {statusLabel[currentTask.status]}
         </Badge>
       </div>
-      <div className="aspect-video bg-background">
-        <div className="studio-preview-bg grid h-full place-items-center">
+      <button
+        aria-label={`查看任务：${currentTask.promptText}`}
+        className="block w-full bg-background text-left"
+        onClick={() => onFocus?.(currentTask)}
+        type="button"
+      >
+        <div className={cn("studio-preview-bg grid place-items-center", compact ? "h-28" : "aspect-video")}>
           {currentTask.status === "succeeded" ? (
             <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
               <Play className="size-5 fill-current" aria-hidden="true" />
@@ -77,7 +100,7 @@ function TaskHistoryCard({ pollIntervalMs, task }: { pollIntervalMs: number; tas
             <StatusIcon status={currentTask.status} />
           )}
         </div>
-      </div>
+      </button>
       <div className="space-y-3 p-3">
         <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
           <span>{parameters?.modelId ?? "Seedance"}</span>
@@ -108,6 +131,24 @@ function TaskHistoryCard({ pollIntervalMs, task }: { pollIntervalMs: number; tas
 }
 
 export function TaskHistoryStream({ pollIntervalMs = taskPollIntervalMs, projectId }: { pollIntervalMs?: number; projectId: string }) {
+  return <TaskHistoryStreamView pollIntervalMs={pollIntervalMs} projectId={projectId} />;
+}
+
+export function TaskHistoryStreamView({
+  className,
+  compact = false,
+  onTaskFocus,
+  pollIntervalMs = taskPollIntervalMs,
+  projectId,
+  selectedTaskId
+}: {
+  className?: string;
+  compact?: boolean;
+  onTaskFocus?: ((task: GenerationTask) => void) | undefined;
+  pollIntervalMs?: number;
+  projectId: string;
+  selectedTaskId?: string | undefined;
+}) {
   const tasksQuery = useQuery({
     queryKey: generationTasksKey(projectId),
     queryFn: () => listGenerationTasks(projectId),
@@ -117,14 +158,21 @@ export function TaskHistoryStream({ pollIntervalMs = taskPollIntervalMs, project
   const tasks = tasksQuery.data ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-3 p-4 pb-28">
+    <div className={cn("space-y-3", className ?? "mx-auto max-w-6xl p-4 pb-28")}>
       {tasksQuery.isError ? (
         <p className="rounded-card border border-danger/40 bg-danger/10 p-3 text-sm text-danger">读取任务列表失败，请刷新后重试。</p>
       ) : null}
       {tasksQuery.isPending ? <p className="text-sm text-muted-foreground">正在读取任务列表...</p> : null}
-      <div className="grid gap-2 md:grid-cols-2">
+      <div className={cn("grid gap-2", compact ? "grid-cols-1" : "md:grid-cols-2")}>
         {tasks.map((task) => (
-          <TaskHistoryCard key={task.id} pollIntervalMs={pollIntervalMs} task={task} />
+          <TaskHistoryCard
+            compact={compact}
+            key={task.id}
+            onFocus={onTaskFocus}
+            pollIntervalMs={pollIntervalMs}
+            selected={selectedTaskId === task.id}
+            task={task}
+          />
         ))}
       </div>
     </div>

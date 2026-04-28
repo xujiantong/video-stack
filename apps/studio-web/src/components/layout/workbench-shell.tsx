@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Bot, Boxes, Compass, KeyRound, Settings, Sparkles } from "lucide-react";
+import { Bot, Boxes, Compass, KeyRound, LayoutDashboard, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useComposerStore, type StudioView } from "@/lib/stores/composer-store";
 
@@ -7,6 +7,7 @@ const navItems: Array<{ id: StudioView; label: string; icon: typeof Sparkles }> 
   { id: "inspiration", label: "灵感", icon: Sparkles },
   { id: "generate", label: "生成", icon: Bot },
   { id: "assets", label: "资产", icon: Boxes },
+  { id: "canvas", label: "画布", icon: LayoutDashboard },
   { id: "settings", label: "设置", icon: Settings },
   { id: "api", label: "API", icon: KeyRound }
 ];
@@ -53,7 +54,7 @@ export function WorkbenchShell({
           })}
         </nav>
       </aside>
-      <main className="grid min-w-0 grid-rows-[auto_1fr_auto]">
+      <main className="grid h-screen min-h-0 min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden">
         {topbar}
         <section className="studio-scrollbar min-h-0 overflow-auto">{content}</section>
         <footer className="border-t border-border bg-card/95">{composer}</footer>

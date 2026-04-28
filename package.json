@@ -4,6 +4,9 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
+    "start:api": "pnpm --filter studio-api start",
+    "start:web": "pnpm --filter studio-web start",
+    "start:worker": "pnpm --filter studio-worker start",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

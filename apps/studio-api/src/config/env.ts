@@ -4,6 +4,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().default("postgres://studio:studio@localhost:5432/studio"),
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
   STUDIO_SECRET_KEY_BASE64: z.string().default(Buffer.alloc(32).toString("base64")),
+  STUDIO_STORAGE_MODE: z.enum(["local", "s3"]).default("local"),
+  STUDIO_STORAGE_BUCKET: z.string().min(1).default("studio-assets"),
+  STUDIO_S3_ENDPOINT: z.string().url().optional(),
+  STUDIO_S3_REGION: z.string().min(1).default("auto"),
+  STUDIO_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  STUDIO_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   PORT: z.coerce.number().int().positive().default(4000)
 });
 

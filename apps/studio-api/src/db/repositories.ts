@@ -65,6 +65,10 @@ export type StudioRepository = {
   createUser(input: CreateUserInput): Promise<UserRecord>;
   createProject(input: CreateProjectInput): Promise<ProjectRecord>;
   createAsset(input: CreateAssetInput): Promise<AssetRecord>;
+  getAsset(assetId: string): Promise<AssetRecord>;
+  listAssets(projectId: string): Promise<AssetRecord[]>;
+  markAssetReady(assetId: string): Promise<AssetRecord>;
+  markAssetRejected(assetId: string): Promise<AssetRecord>;
   createProviderCredential(input: CreateProviderCredentialInput): Promise<ProviderCredentialRecord>;
   listProviderCredentials(userId: string): Promise<ProviderCredentialRecord[]>;
   getProviderCredential(credentialId: string): Promise<ProviderCredentialRecord>;
@@ -144,6 +148,41 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
       };
       assetRows.set(row.id, row);
       return row;
+    },
+    async getAsset(assetId) {
+      const row = assetRows.get(assetId);
+      if (!row || row.deletedAt !== null || row.status === "deleted") throw notFound("素材", assetId);
+      return row;
+    },
+    async listAssets(projectId) {
+      if (!projectRows.has(projectId)) throw notFound("项目", projectId);
+      return [...assetRows.values()]
+        .filter((row) => row.projectId === projectId && row.deletedAt === null && row.status !== "deleted")
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    },
+    async markAssetReady(assetId) {
+      const row = assetRows.get(assetId);
+      if (!row || row.deletedAt !== null || row.status === "deleted") throw notFound("素材", assetId);
+      const updatedAt = now();
+      const updated: AssetRecord = {
+        ...row,
+        status: "ready",
+        updatedAt
+      };
+      assetRows.set(assetId, updated);
+      return updated;
+    },
+    async markAssetRejected(assetId) {
+      const row = assetRows.get(assetId);
+      if (!row || row.deletedAt !== null || row.status === "deleted") throw notFound("素材", assetId);
+      const updatedAt = now();
+      const updated: AssetRecord = {
+        ...row,
+        status: "rejected",
+        updatedAt
+      };
+      assetRows.set(assetId, updated);
+      return updated;
     },
     async createProviderCredential(input) {
       if (!userRows.has(input.userId)) throw notFound("用户", input.userId);

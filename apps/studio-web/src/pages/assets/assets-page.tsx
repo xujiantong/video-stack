@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, Eye, Film, PanelRightClose, PenLine, Trash2, Upload } from "lucide-react";
 import { AssetIcon } from "@/components/domain/asset-icon";
 import { StatusBadge } from "@/components/domain/status-badge";
@@ -8,10 +8,23 @@ import { Drawer, DrawerBody, DrawerHeader, DrawerTitle } from "@/components/ui/d
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
+import { completeAssetUpload, presignAssetUpload, uploadAssetBytes } from "@/lib/api/assets-api";
 import { cn } from "@/lib/utils";
 import { useComposerStore } from "@/lib/stores/composer-store";
 
 type AssetTab = "assets" | "tasks";
+
+function toSizeLabel(sizeBytes: number): string {
+  if (sizeBytes >= 1024 * 1024) return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (sizeBytes >= 1024) return `${Math.round(sizeBytes / 1024)} KB`;
+  return `${sizeBytes} B`;
+}
+
+function toFileType(mimeType: string): "image" | "audio" | "video" {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("audio/")) return "audio";
+  return "video";
+}
 
 function IconAction({ children, danger = false, label }: { children: ReactNode; danger?: boolean; label: string }) {
   return (
@@ -27,7 +40,64 @@ export function AssetsPage() {
   const [activeTab, setActiveTab] = useState<AssetTab>("assets");
   const assets = useComposerStore((state) => state.assets);
   const tasks = useComposerStore((state) => state.tasks);
+  const upsertAsset = useComposerStore((state) => state.upsertAsset);
+  const setAssetStatus = useComposerStore((state) => state.setAssetStatus);
   const selectedTask = tasks[0];
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(() => new Set());
+  const [retryFiles, setRetryFiles] = useState<Record<string, File>>({});
+  const projectId = useMemo(() => tasks[0]?.projectId ?? "00000000-0000-4000-8000-000000000001", [tasks]);
+
+  async function uploadOne(file: File, existingAssetId?: string) {
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+    let nextAssetId = existingAssetId;
+    try {
+      const presign = await presignAssetUpload({
+        projectId,
+        fileName: file.name,
+        mimeType: file.type as never,
+        sizeBytes: file.size,
+        durationMs: null
+      });
+
+      nextAssetId = presign.assetId;
+      setRetryFiles((state) => ({ ...state, [presign.assetId]: file }));
+      setUploadingIds((state) => new Set([...state, presign.assetId]));
+      upsertAsset({
+        id: presign.assetId,
+        kind: toFileType(file.type) === "audio" ? "audio" : toFileType(file.type) === "video" ? "video" : "image",
+        label: file.name.replace(/\.[^/.]+$/, "") || file.name,
+        fileType: toFileType(file.type),
+        sizeLabel: toSizeLabel(file.size),
+        references: 0,
+        createdAt: "刚刚",
+        status: "uploading",
+        previewUrl
+      });
+
+      await uploadAssetBytes(presign.uploadUrl, presign.uploadHeaders, file);
+      await completeAssetUpload({ assetId: presign.assetId, projectId, storageKey: presign.storageKey });
+      setAssetStatus(presign.assetId, "ready");
+    } catch (error) {
+      if (nextAssetId) {
+        setAssetStatus(nextAssetId, "failed", error instanceof Error ? error.message : "上传失败，请重试。");
+      }
+    } finally {
+      if (nextAssetId) {
+        setUploadingIds((state) => {
+          const next = new Set(state);
+          next.delete(nextAssetId);
+          return next;
+        });
+      }
+    }
+  }
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const first = files[0];
+    await uploadOne(first);
+  }
 
   return (
     <div className="grid min-h-full grid-cols-1 gap-4 p-4 pb-28 xl:grid-cols-[1fr_360px]">
@@ -41,10 +111,25 @@ export function AssetsPage() {
               任务列表
             </TabsTrigger>
           </TabsList>
-          <Button type="button">
+          <Button
+            onClick={() => {
+              fileInputRef.current?.click();
+            }}
+            type="button"
+          >
             <Upload className="size-4" aria-hidden="true" />
             上传素材
           </Button>
+          <input
+            accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav"
+            className="hidden"
+            onChange={(event) => {
+              void handleFiles(event.target.files);
+              event.target.value = "";
+            }}
+            ref={fileInputRef}
+            type="file"
+          />
         </div>
 
         {activeTab === "assets" ? (
@@ -56,6 +141,7 @@ export function AssetsPage() {
                   <TableHead>名称</TableHead>
                   <TableHead>类型</TableHead>
                   <TableHead>大小</TableHead>
+                  <TableHead>状态</TableHead>
                   <TableHead>引用次数</TableHead>
                   <TableHead>创建时间</TableHead>
                   <TableHead className="w-24">操作</TableHead>
@@ -70,10 +156,42 @@ export function AssetsPage() {
                     <TableCell className="font-medium">{asset.label}</TableCell>
                     <TableCell className="text-muted-foreground">{asset.fileType}</TableCell>
                     <TableCell className="text-muted-foreground">{asset.sizeLabel}</TableCell>
+                    <TableCell>
+                      {asset.status === "ready" ? (
+                        <Badge tone="success">已完成</Badge>
+                      ) : asset.status === "uploading" ? (
+                        <Badge tone="warning">上传中</Badge>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge tone="danger">失败</Badge>
+                          <span className="text-xs text-muted-foreground">{asset.uploadError ?? "上传失败，请重试。"}</span>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>{asset.references}</TableCell>
                     <TableCell className="text-muted-foreground">{asset.createdAt}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {asset.status === "failed" ? (
+                          <Tooltip label="重试上传">
+                            <Button
+                              aria-label="重试上传"
+                              className="h-8 px-2"
+                              onClick={() => {
+                                const file = retryFiles[asset.id];
+                                if (!file) {
+                                  fileInputRef.current?.click();
+                                  return;
+                                }
+                                void uploadOne(file, asset.id);
+                              }}
+                              type="button"
+                              variant="ghost"
+                            >
+                              重试
+                            </Button>
+                          </Tooltip>
+                        ) : null}
                         <IconAction label="查看资产">
                           <Eye className="size-4" aria-hidden="true" />
                         </IconAction>

@@ -2,25 +2,33 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { readEnv, readSecretKey } from "./config/env";
 import { createInMemoryStudioRepository } from "./db/repositories";
+import { createAssetRoutes } from "./routes/assets";
 import { createCredentialRoutes } from "./routes/credentials";
 import { generationRoutes } from "./routes/generation";
+import { createAssetService } from "./services/asset-service";
 import { createCredentialService } from "./services/credential-service";
+import { createStorageService } from "./services/storage-service";
 
 export const defaultUserId = "00000000-0000-4000-8000-000000000501";
+export const defaultProjectId = "00000000-0000-4000-8000-000000000001";
 
 export async function buildServer() {
   const env = readEnv();
   const repository = createInMemoryStudioRepository();
   await repository.createUser({ email: "local@studio.internal", id: defaultUserId });
+  await repository.createProject({ id: defaultProjectId, userId: defaultUserId, name: "影栈 Studio" });
   const credentialService = createCredentialService({
     repository,
     secretKey: readSecretKey(env),
     userId: defaultUserId
   });
+  const storage = createStorageService(env);
+  const assetService = createAssetService({ repository, storage, userId: defaultUserId });
 
   const app = Fastify({ logger: true });
   await app.register(cors, { origin: true });
   await app.register(createCredentialRoutes(credentialService), { prefix: "/api" });
+  await app.register(createAssetRoutes(assetService), { prefix: "/api" });
   await app.register(generationRoutes, { prefix: "/api" });
 
   app.get("/health", async () => ({ ok: true }));

@@ -9,6 +9,8 @@ export type StudioAsset = AssetMention & {
   references: number;
   createdAt: string;
   status: "ready" | "uploading" | "failed";
+  previewUrl?: string;
+  uploadError?: string;
 };
 
 type ComposerState = {
@@ -18,6 +20,8 @@ type ComposerState = {
   tasks: GenerationTask[];
   setView(view: StudioView): void;
   setPrompt(prompt: string): void;
+  upsertAsset(asset: StudioAsset): void;
+  setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
   addTask(task: GenerationTask): void;
 };
 
@@ -125,6 +129,30 @@ export const useComposerStore = create<ComposerState>((set) => ({
   },
   setPrompt(prompt) {
     set({ prompt });
+  },
+  upsertAsset(asset) {
+    set((state) => {
+      const existingIndex = state.assets.findIndex((row) => row.id === asset.id);
+      if (existingIndex < 0) {
+        return { assets: [asset, ...state.assets] };
+      }
+      const nextAssets = [...state.assets];
+      nextAssets[existingIndex] = { ...nextAssets[existingIndex], ...asset };
+      return { assets: nextAssets };
+    });
+  },
+  setAssetStatus(assetId, status, uploadError) {
+    set((state) => ({
+      assets: state.assets.map((asset) =>
+        asset.id === assetId
+          ? {
+              ...asset,
+              status,
+              uploadError: status === "failed" ? uploadError ?? "上传失败，请重试。" : undefined
+            }
+          : asset
+      )
+    }));
   },
   addTask(task) {
     set((state) => ({ tasks: [task, ...state.tasks] }));

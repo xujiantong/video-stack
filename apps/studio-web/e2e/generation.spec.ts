@@ -102,3 +102,24 @@ test("user can save and test masked API credentials", async ({ page }) => {
   await page.getByRole("button", { name: "检测连接" }).click();
   await expect(page.getByText("凭证已保存并可解密。真实连通性将在接入即梦 Provider 后检测。")).toBeVisible();
 });
+
+test("user can use login and API Key login states", async ({ page }) => {
+  await page.goto("/login");
+
+  await expect(page.getByRole("heading", { name: "登录影栈 Studio" })).toBeVisible();
+  await page.getByRole("textbox", { name: "邮箱" }).fill("creator@example.com");
+  await page.getByLabel("密码").fill("bad-password");
+  await page.getByRole("button", { name: "登录" }).click();
+  await expect(page.getByRole("button", { name: "登录中..." })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("登录失败，请检查邮箱和密码");
+  await expect(page.getByRole("textbox", { name: "邮箱" })).toHaveValue("creator@example.com");
+
+  await page.getByRole("tab", { name: "使用 API Key 登录" }).click();
+  await expect(page.getByRole("textbox", { name: "服务区域" })).toHaveValue("cn-north-1");
+  await page.getByRole("textbox", { name: "API Key" }).fill("ak_demo");
+  await page.getByLabel("Secret Key").fill("sk_secret");
+  await page.getByRole("button", { name: "验证并登录" }).click();
+  await expect(page.getByRole("button", { name: "登录中..." })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("API Key 登录失败");
+  await expect(page.getByLabel("Secret Key")).toHaveValue("");
+});

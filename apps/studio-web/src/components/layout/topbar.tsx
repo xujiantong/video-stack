@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, LogIn, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useComposerStore } from "@/lib/stores/composer-store";
@@ -7,13 +7,16 @@ const filterLabels = ["今天", "视频生成", "全部操作"];
 
 export function Topbar() {
   const view = useComposerStore((state) => state.view);
+  const setView = useComposerStore((state) => state.setView);
   const title =
     view === "assets"
       ? "资产与任务"
       : view === "api"
         ? "API 设置"
-        : view === "settings"
-          ? "系统设置"
+        : view === "login"
+          ? "登录"
+          : view === "settings"
+            ? "系统设置"
           : view === "canvas"
             ? "画布"
             : "产品短片工作台";
@@ -44,6 +47,10 @@ export function Topbar() {
             <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
           </Button>
         ))}
+        <Button className="h-9" type="button" variant="secondary" onClick={() => setView("login")}>
+          <LogIn className="size-4" aria-hidden="true" />
+          登录
+        </Button>
       </div>
     </header>
   );

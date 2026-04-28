@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { DEFAULT_GENERATION_PARAMETERS, type AssetMention, type GenerationParameters } from "@video-stack/shared";
 
-export type StudioView = "inspiration" | "generate" | "assets" | "canvas" | "settings" | "api";
+export type StudioView = "inspiration" | "generate" | "assets" | "canvas" | "settings" | "api" | "login";
 
 export type StudioAsset = AssetMention & {
   fileType: "image" | "audio" | "video";

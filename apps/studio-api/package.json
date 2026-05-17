@@ -16,13 +16,16 @@
     "@aws-sdk/client-s3": "^3.888.0",
     "@aws-sdk/s3-request-presigner": "^3.888.0",
     "@fastify/cors": "^10.0.2",
+    "@video-stack/provider-jimeng": "workspace:^",
     "@video-stack/shared": "workspace:*",
     "bullmq": "^5.34.2",
     "drizzle-orm": "^0.38.3",
     "fastify": "^5.1.0",
+    "pg": "^8.20.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelCapabilitySchema, modelSupportsParameters } from "./models";
+import { DEFAULT_MODEL_CAPABILITIES, modelCapabilitySchema, modelSupportsParameters } from "./models";
 
 const baseCapability = {
   id: "seedance-demo",
@@ -20,6 +20,15 @@ const baseCapability = {
 } as const;
 
 describe("model schemas", () => {
+  it("enables the three Jimeng video 3.0 capabilities", () => {
+    expect(DEFAULT_MODEL_CAPABILITIES.map((model) => model.id)).toEqual([
+      "jimeng-video-v3-720p",
+      "jimeng-video-v3-1080p",
+      "jimeng-video-v3-pro-1080p"
+    ]);
+    expect(DEFAULT_MODEL_CAPABILITIES.every((model) => model.enabled)).toBe(true);
+  });
+
   it("validates model capability records without requiring unconfirmed official IDs", () => {
     const result = modelCapabilitySchema.safeParse(baseCapability);
 

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock3, Copy, Film, Maximize2, PenLine, Play, RefreshCcw, ShieldAlert } from "lucide-react";
-import { DEFAULT_GENERATION_PARAMETERS, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
+import { Bookmark, Download, Info, MoreHorizontal, PenLine, Play, RefreshCcw, ShieldAlert, Trash2, Waves, X } from "lucide-react";
+import { DEFAULT_GENERATION_PARAMETERS, DEFAULT_MODEL_CAPABILITIES, type AssetMention, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { TaskHistoryStreamView } from "@/features/task-history/task-history-stream";
-import { estimateGeneration, generationTaskKey, generationTasksKey, listGenerationTasks, regenerateGenerationTask } from "@/lib/api/generation-api";
+import { deleteGenerationTask, estimateGeneration, generationTaskKey, generationTasksKey, listGenerationTasks, regenerateGenerationTask } from "@/lib/api/generation-api";
 import { useComposerStore } from "@/lib/stores/composer-store";
+import { cn } from "@/lib/utils";
 
 const statusTone: Record<GenerationTask["status"], "muted" | "primary" | "warning" | "danger" | "success"> = {
   draft: "muted",
@@ -24,126 +24,399 @@ function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
   return tasks?.some((task) => task.status === "queued" || task.status === "running") ?? false;
 }
 
-function PreviewStage({
-  onCopyParameters,
-  onEdit,
-  onRegenerate,
-  regeneratePending,
+function formatClock(value: string): string {
+  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function referenceLabel(referenceMode: string | undefined): string {
+  if (referenceMode === "image") return "图片参考";
+  if (referenceMode === "first_last_frame") return "首尾帧";
+  return "自动";
+}
+
+function assetLabel(asset: AssetMention): string {
+  if (asset.kind === "audio") return "音频";
+  if (asset.kind === "video") return "视频";
+  return "图片";
+}
+
+function PromptWithRefs({ compact = false, task }: { compact?: boolean; task: GenerationTask }) {
+  return (
+    <div className={cn("min-w-0 font-medium leading-6 text-foreground", compact ? "text-sm" : "text-lg")}>
+      {task.assetRefs.map((assetRef) => (
+        <Badge className="mr-1" key={assetRef.id} tone="primary">
+          @{assetLabel(assetRef)}{task.assetRefs.indexOf(assetRef) + 1}
+        </Badge>
+      ))}
+      <span>{task.promptText}</span>
+    </div>
+  );
+}
+
+function modelLabel(modelId: string): string {
+  const model = DEFAULT_MODEL_CAPABILITIES.find((item) => item.id === modelId);
+  if (model) return model.displayName;
+  return modelId.replace("jimeng-video-v3", "即梦AI-视频生成3.0");
+}
+
+function TaskMeta({ onDetailsClick, task }: { onDetailsClick(): void; task: GenerationTask }) {
+  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span>{modelLabel(parameters.modelId)}</span>
+      <span className="text-border">|</span>
+      <span>{parameters.durationSeconds}s</span>
+      <span className="text-border">|</span>
+      <button className="inline-flex items-center gap-1.5 hover:text-foreground" onClick={onDetailsClick} type="button">
+        详细信息
+        <Info className="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function ProgressBar({ task }: { task: GenerationTask }) {
+  if (task.status !== "queued" && task.status !== "running") return null;
+  const progress = task.status === "running" ? 36 : 12;
+  return (
+    <div className="mt-4 grid gap-2">
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <span className="block h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+      </div>
+      <p className="text-right text-sm text-muted-foreground">预计剩余 01:32</p>
+    </div>
+  );
+}
+
+function DetailsPopover({ task }: { task: GenerationTask }) {
+  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  return (
+    <div className="absolute right-0 top-10 z-20 w-80 rounded-card border border-border bg-surface-raised p-5 text-sm shadow-popover">
+      <dl className="grid grid-cols-[1fr_auto] gap-x-8 gap-y-4">
+        <dt className="text-muted-foreground">视频比例</dt>
+        <dd>{parameters.aspectRatio}</dd>
+        <dt className="text-muted-foreground">帧率</dt>
+        <dd>24</dd>
+        <dt className="text-muted-foreground">分辨率</dt>
+        <dd>{parameters.resolution.toUpperCase()}</dd>
+        <dt className="text-muted-foreground">生成时间</dt>
+        <dd>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(task.createdAt))}</dd>
+        <dt className="text-muted-foreground">参考模式</dt>
+        <dd>{referenceLabel(parameters.referenceMode)}</dd>
+      </dl>
+    </div>
+  );
+}
+
+function resultUrlForTask(task: GenerationTask): string | null {
+  return task.resultAssetId ? `/api/assets/${task.resultAssetId}/content#t=0.1` : null;
+}
+
+function ResultPreview({
+  menuOpen,
+  onDelete,
+  onMenuToggle,
+  onOpenViewer,
   task
 }: {
-  onCopyParameters(task: GenerationTask): void;
-  onEdit(task: GenerationTask): void;
-  onRegenerate(task: GenerationTask): void;
-  regeneratePending: boolean;
-  task: GenerationTask | undefined;
+  menuOpen: boolean;
+  onDelete(): void;
+  onMenuToggle(): void;
+  onOpenViewer(): void;
+  task: GenerationTask;
 }) {
-  if (!task) {
+  const resultUrl = resultUrlForTask(task);
+
+  if (task.status === "succeeded" && resultUrl) {
     return (
-      <section aria-label="视频预览" className="grid min-h-[420px] place-items-center rounded-card border border-border bg-surface" role="region">
-        <div className="max-w-sm text-center">
-          <div className="mx-auto grid size-14 place-items-center rounded-card border border-border bg-muted text-muted-foreground">
-            <Film className="size-6" aria-hidden="true" />
+      <div className="studio-preview-bg relative aspect-video max-h-[300px] cursor-zoom-in overflow-hidden bg-background">
+        <video
+          aria-label="生成结果预览"
+          className="absolute inset-0 h-full w-full bg-black object-cover"
+          muted
+          playsInline
+          preload="metadata"
+          src={resultUrl}
+        />
+        <span className="absolute left-3 top-3 rounded-button border border-white/20 bg-black/40 px-2 py-0.5 text-xs font-medium text-white/80 backdrop-blur">AI生成</span>
+        <button aria-label="放大查看生成结果" className="absolute inset-0 z-10 grid place-items-center" onClick={onOpenViewer} type="button">
+          <span className="grid size-16 place-items-center rounded-full bg-background/65 text-foreground backdrop-blur transition">
+            <Play className="ml-1 size-7 fill-current" aria-hidden="true" />
+          </span>
+        </button>
+        <div className="absolute right-3 top-3 z-20 flex items-center rounded-button bg-background/80 p-0.5 text-foreground shadow-popover backdrop-blur">
+          <Button aria-label="下载结果" className="size-5 px-0" onClick={(event) => event.stopPropagation()} type="button" variant="ghost">
+            <Download className="size-3" aria-hidden="true" />
+          </Button>
+          <div className="relative">
+            <Button
+              aria-expanded={menuOpen}
+              aria-label="更多操作"
+              className="size-5 px-0"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMenuToggle();
+              }}
+              type="button"
+              variant="ghost"
+            >
+              <MoreHorizontal className="size-3" aria-hidden="true" />
+            </Button>
+            {menuOpen ? <TaskMenu onDelete={onDelete} /> : null}
           </div>
-          <p className="mt-4 text-sm font-medium">暂无生成任务</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">输入提示词后生成，任务会出现在历史流中。</p>
+          <Button aria-label="收藏" className="size-5 px-0" onClick={(event) => event.stopPropagation()} type="button" variant="ghost">
+            <Bookmark className="size-3" aria-hidden="true" />
+          </Button>
         </div>
-      </section>
+        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-5 pb-4 pt-12 text-white">
+          <span className="font-mono text-sm">00:00 / 00:{(task.parameters ?? DEFAULT_GENERATION_PARAMETERS).durationSeconds.toString().padStart(2, "0")}</span>
+        </div>
+      </div>
     );
   }
+  if (task.status === "failed") {
+    return (
+      <div className="mt-3 rounded-card border border-danger/30 bg-danger/10 p-4 text-sm leading-6 text-danger" role="alert">
+        <ShieldAlert className="mr-2 inline size-4" aria-hidden="true" />
+        {task.errorMessage ? `${task.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。"}
+      </div>
+    );
+  }
+  return null;
+}
 
-  const parameters = task.parameters;
-  const hasFailed = task.status === "failed";
-  const costCents = task.actualCostCents ?? task.estimatedCostCents;
+function VideoViewer({
+  onClose,
+  onDelete,
+  onEdit,
+  onRegenerate,
+  task
+}: {
+  onClose(): void;
+  onDelete(): void;
+  onEdit(): void;
+  onRegenerate(): void;
+  task: GenerationTask;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const resultUrl = resultUrlForTask(task);
+  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  if (!resultUrl) return null;
 
   return (
-    <section aria-label="视频预览" className="min-h-0 rounded-card border border-border bg-surface" role="region">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-xs uppercase text-muted-foreground">视频预览</p>
-          <h2 className="mt-1 truncate text-base font-semibold">{task.promptText}</h2>
+    <div className="fixed inset-0 z-50 grid grid-cols-[minmax(0,1fr)_360px] bg-background text-foreground" role="dialog" aria-label="视频查看器" aria-modal="true">
+      <main className="grid min-h-0 place-items-center p-8">
+        <Button aria-label="关闭查看器" className="absolute right-[384px] top-6 size-10 px-0" onClick={onClose} type="button" variant="secondary">
+          <X className="size-5" aria-hidden="true" />
+        </Button>
+        <div className="relative w-full max-w-6xl overflow-hidden rounded-card bg-black shadow-popover">
+          <video aria-label="放大生成结果预览" autoPlay className="max-h-[78vh] w-full object-contain" controls muted playsInline src={resultUrl} />
+          <span className="absolute left-4 top-4 rounded-button border border-white/20 bg-black/40 px-2 py-1 text-sm font-medium text-white/80 backdrop-blur">AI生成</span>
         </div>
-        <Badge className="shrink-0" tone={statusTone[task.status]}>
-          {statusLabel[task.status]}
-        </Badge>
-      </div>
-      <div className="p-4">
-        <div className="studio-preview-bg grid aspect-video place-items-center overflow-hidden rounded-card border border-border bg-background">
-          {task.status === "succeeded" ? (
-            <Button aria-label="播放生成结果" className="size-14 rounded-full px-0" type="button">
-              <Play className="size-5 fill-current" aria-hidden="true" />
+      </main>
+      <aside className="border-l border-border bg-card/95 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <Button className="h-10 px-4" type="button" variant="secondary">
+            <Download className="size-4" aria-hidden="true" />
+            下载
+          </Button>
+          <div className="relative flex items-center gap-2">
+            <Button aria-label="收藏" className="size-10 px-0" type="button" variant="ghost">
+              <Bookmark className="size-4" aria-hidden="true" />
             </Button>
-          ) : hasFailed ? (
-            <div className="max-w-md px-6 text-center" role="alert">
-              <ShieldAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
-              <p className="mt-3 text-sm font-medium text-danger">生成失败</p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{task.errorMessage ? `${task.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。"}</p>
-            </div>
-          ) : (
-            <div className="text-center">
-              <Clock3 className="mx-auto size-8 text-primary" aria-hidden="true" />
-              <p className="mt-3 text-sm font-medium">{statusLabel[task.status]}</p>
-              <p className="mt-2 text-sm text-muted-foreground">任务运行时仍可编辑下一条提示词。</p>
-            </div>
-          )}
-        </div>
-        <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_220px]">
-          <div className="rounded-card border border-border bg-background/50 p-3">
-            <p className="text-xs uppercase text-muted-foreground">原始提示词</p>
-            <p className="mt-2 text-sm leading-6">{task.promptText}</p>
-            {task.assetRefs.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {task.assetRefs.map((assetRef) => (
-                  <Badge key={assetRef.id}>@{assetRef.label}</Badge>
-                ))}
-              </div>
-            ) : null}
+            <Button
+              aria-expanded={menuOpen}
+              aria-label="更多操作"
+              className="size-10 px-0"
+              onClick={() => setMenuOpen((open) => !open)}
+              type="button"
+              variant="ghost"
+            >
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+            </Button>
+            {menuOpen ? <TaskMenu onDelete={onDelete} /> : null}
           </div>
-          <dl className="grid grid-cols-2 gap-2 rounded-card border border-border bg-background/50 p-3 text-xs">
-            <div>
-              <dt className="text-muted-foreground">模型</dt>
-              <dd className="mt-1 font-medium">{parameters?.modelId ?? "seedance-lite"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">比例</dt>
-              <dd className="mt-1 font-medium">{parameters?.aspectRatio ?? "16:9"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">分辨率</dt>
-              <dd className="mt-1 font-medium">{parameters?.resolution.toUpperCase() ?? "1080P"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">时长</dt>
-              <dd className="mt-1 font-medium">{parameters ? `${parameters.durationSeconds}s` : "8s"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">费用</dt>
-              <dd className="mt-1 font-medium text-warning">¥{(costCents / 100).toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">状态</dt>
-              <dd className="mt-1 font-medium">{statusLabel[task.status]}</dd>
-            </div>
-          </dl>
         </div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => onEdit(task)}>
+        <div className="mt-6 border-t border-border pt-6">
+          <p className="text-sm text-muted-foreground">视频提示词</p>
+          <p className="mt-3 text-sm leading-6">{task.promptText}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{modelLabel(parameters.modelId)}</span>
+            <span>|</span>
+            <span>{parameters.durationSeconds}s</span>
+            <span>|</span>
+            <span>{parameters.aspectRatio}</span>
+          </div>
+        </div>
+        <dl className="mt-8 grid grid-cols-[1fr_auto] gap-y-4 text-sm">
+          <dt className="text-muted-foreground">分辨率</dt>
+          <dd>{parameters.resolution.toUpperCase()}</dd>
+          <dt className="text-muted-foreground">参考模式</dt>
+          <dd>{referenceLabel(parameters.referenceMode)}</dd>
+          <dt className="text-muted-foreground">生成时间</dt>
+          <dd>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(task.createdAt))}</dd>
+        </dl>
+        <div className="absolute bottom-6 right-6 grid w-[312px] grid-cols-2 gap-3">
+          <Button type="button" variant="secondary" onClick={onEdit}>
             <PenLine className="size-4" aria-hidden="true" />
             重新编辑
           </Button>
-          <Button type="button" variant="secondary" onClick={() => onCopyParameters(task)}>
-            <Copy className="size-4" aria-hidden="true" />
-            复制参数
-          </Button>
-          <Button type="button" onClick={() => onRegenerate(task)} disabled={regeneratePending}>
+          <Button type="button" variant="secondary" onClick={onRegenerate}>
             <RefreshCcw className="size-4" aria-hidden="true" />
             再次生成
           </Button>
-          <Button aria-label="全屏预览" className="size-10 px-0" type="button" variant="ghost">
-            <Maximize2 className="size-4" aria-hidden="true" />
-          </Button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function TaskMenu({ onDelete }: { onDelete(): void }) {
+  return (
+    <div className="absolute left-1/2 top-12 z-30 w-44 -translate-x-1/2 rounded-card border border-border bg-surface-raised p-2 shadow-popover">
+      <button className="flex h-10 w-full items-center gap-2 rounded-button px-3 text-left text-sm text-danger hover:bg-danger/10" onClick={onDelete} type="button">
+        <Trash2 className="size-4" aria-hidden="true" />
+        删除
+      </button>
+    </div>
+  );
+}
+
+function HistoryTaskCard({
+  onEdit,
+  onDelete,
+  onFocus,
+  onRegenerate,
+  selected,
+  task
+}: {
+  onEdit(task: GenerationTask): void;
+  onDelete(task: GenerationTask): void;
+  onFocus(task: GenerationTask): void;
+  onRegenerate(task: GenerationTask): void;
+  selected: boolean;
+  task: GenerationTask;
+}) {
+  const isSucceeded = task.status === "succeeded";
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [mediaMenuOpen, setMediaMenuOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const closeSecondaryMenus = () => {
+    setDetailsOpen(false);
+    setMediaMenuOpen(false);
+    setActionMenuOpen(false);
+  };
+
+  return (
+    <article
+      className={cn(
+        "flex w-full max-w-[720px] gap-3 transition",
+        selected && "text-foreground"
+      )}
+      onClick={() => {
+        closeSecondaryMenus();
+        onFocus(task);
+      }}
+    >
+      <div className="mt-1 grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-sm font-semibold text-primary">AI</div>
+      <div className="min-w-0 flex-1">
+        <div className="rounded-card bg-surface px-4 py-3 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <PromptWithRefs compact task={task} />
+            <Badge className="shrink-0" tone={statusTone[task.status]}>{statusLabel[task.status]}{task.status === "running" ? " 36%" : ""}</Badge>
+          </div>
+          <div className="relative mt-2 inline-flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+            <TaskMeta
+              onDetailsClick={() => {
+                setMediaMenuOpen(false);
+                setActionMenuOpen(false);
+                setDetailsOpen((open) => !open);
+              }}
+              task={task}
+            />
+            {detailsOpen ? <DetailsPopover task={task} /> : null}
+          </div>
+          <ResultPreview
+            menuOpen={mediaMenuOpen}
+            onDelete={() => onDelete(task)}
+            onMenuToggle={() => {
+              setDetailsOpen(false);
+              setActionMenuOpen(false);
+              setMediaMenuOpen((open) => !open);
+            }}
+            onOpenViewer={() => {
+              closeSecondaryMenus();
+              setViewerOpen(true);
+            }}
+            task={task}
+          />
+          <ProgressBar task={task} />
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button className="h-9 px-3 text-xs" type="button" variant="secondary" onClick={() => onEdit(task)}>
+              <PenLine className="size-4" aria-hidden="true" />
+              重新编辑
+            </Button>
+            <Button className="h-9 px-3 text-xs" type="button" variant="secondary" onClick={() => onRegenerate(task)}>
+              <RefreshCcw className="size-4" aria-hidden="true" />
+              再次生成
+            </Button>
+            <Button
+              aria-expanded={actionMenuOpen}
+              aria-label="更多操作"
+              className="size-9 px-0"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDetailsOpen(false);
+                setMediaMenuOpen(false);
+                setActionMenuOpen((open) => !open);
+              }}
+              type="button"
+              variant="secondary"
+            >
+              <MoreHorizontal className="size-4" aria-hidden="true" />
+            </Button>
+            {actionMenuOpen ? (
+              <Button className="h-9 px-4 text-xs text-danger" onClick={() => onDelete(task)} type="button" variant="secondary">
+                <Trash2 className="size-4" aria-hidden="true" />
+                删除
+              </Button>
+            ) : null}
+            {!isSucceeded ? null : (
+              <Button aria-label="收藏" className="size-9 px-0" type="button" variant="ghost">
+                <Bookmark className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
+          <span className="whitespace-nowrap text-xs text-muted-foreground">今天 {formatClock(task.createdAt)}</span>
         </div>
       </div>
-    </section>
+      {viewerOpen ? (
+        <VideoViewer
+          onClose={() => setViewerOpen(false)}
+          onDelete={() => onDelete(task)}
+          onEdit={() => onEdit(task)}
+          onRegenerate={() => onRegenerate(task)}
+          task={task}
+        />
+      ) : null}
+    </article>
+  );
+}
+
+function EmptyHistory() {
+  return (
+    <div className="grid min-h-[360px] place-items-center rounded-card border border-border bg-surface p-6 text-center">
+      <div>
+        <div className="mx-auto grid size-14 place-items-center rounded-card border border-border bg-muted text-primary">
+          <Waves className="size-6" aria-hidden="true" />
+        </div>
+        <p className="mt-4 text-sm font-medium">暂无生成任务</p>
+        <p className="mt-2 text-sm text-muted-foreground">输入提示词后生成，任务会出现在历史流中。</p>
+      </div>
+    </div>
   );
 }
 
@@ -175,7 +448,7 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
         fallbackEstimate: { estimatedCostCents: estimate.estimatedCostCents, requiresSecondConfirm: true }
       }),
     onSuccess(task) {
-      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(projectId), (rows) => [task, ...(rows?.filter((row) => row.id !== task.id) ?? [])]);
+      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(projectId), (rows) => [...(rows?.filter((row) => row.id !== task.id) ?? []), task]);
       queryClient.setQueryData(generationTaskKey(task.id), task);
       setSelectedTaskId(task.id);
       setConfirmRegenerate(null);
@@ -194,15 +467,18 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
       setConfirmRegenerate({ estimate, task });
     }
   });
+  const deleteMutation = useMutation({
+    mutationFn: deleteGenerationTask,
+    onSuccess(deletedTask) {
+      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(projectId), (rows) => rows?.filter((row) => row.id !== deletedTask.id) ?? []);
+      queryClient.removeQueries({ queryKey: generationTaskKey(deletedTask.id) });
+      setSelectedTaskId((current) => (current === deletedTask.id ? undefined : current));
+    }
+  });
 
   function editTask(task: GenerationTask) {
     setPrompt(task.promptText);
     if (task.parameters) setParameters(task.parameters);
-  }
-
-  function copyTaskParameters(task: GenerationTask) {
-    const parameters = task.parameters ? JSON.stringify(task.parameters, null, 2) : "当前任务没有参数快照。";
-    void navigator.clipboard?.writeText(parameters);
   }
 
   function confirmAgain() {
@@ -210,33 +486,31 @@ export function WorkbenchDashboard({ projectId }: { projectId: string }) {
     regenerateMutation.mutate(confirmRegenerate);
   }
 
+  function deleteTask(task: GenerationTask) {
+    if (!window.confirm("确定删除这个任务吗？")) return;
+    deleteMutation.mutate(task.id);
+  }
+
   return (
-    <div className="grid min-h-full gap-4 p-4 pb-6 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
-      <aside className="min-h-0">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">任务历史流</p>
-            <h2 className="mt-1 text-base font-semibold">按时间倒序</h2>
-          </div>
-          <Badge tone="primary">{tasks.length} 条</Badge>
-        </div>
-        <TaskHistoryStreamView
-          className="pb-2"
-          compact
-          onTaskEdit={editTask}
-          onTaskFocus={(task) => setSelectedTaskId(task.id)}
-          onTaskRegenerate={(task) => estimateMutation.mutate(task)}
-          projectId={projectId}
-          selectedTaskId={selectedTask?.id}
+    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4 py-6 pb-8">
+      {tasksQuery.isError ? (
+        <p className="rounded-card border border-danger/40 bg-danger/10 p-3 text-sm text-danger" role="alert">
+          读取任务列表失败，请刷新后重试。
+        </p>
+      ) : null}
+      {tasksQuery.isPending ? <p className="text-sm text-muted-foreground">正在读取任务列表...</p> : null}
+      {!tasksQuery.isPending && !tasksQuery.isError && tasks.length === 0 ? <EmptyHistory /> : null}
+      {tasks.map((task) => (
+        <HistoryTaskCard
+          key={task.id}
+          onEdit={editTask}
+          onDelete={deleteTask}
+          onFocus={(nextTask) => setSelectedTaskId(nextTask.id)}
+          onRegenerate={(nextTask) => estimateMutation.mutate(nextTask)}
+          selected={selectedTask?.id === task.id}
+          task={task}
         />
-      </aside>
-      <PreviewStage
-        onCopyParameters={copyTaskParameters}
-        onEdit={editTask}
-        onRegenerate={(task) => estimateMutation.mutate(task)}
-        regeneratePending={estimateMutation.isPending || regenerateMutation.isPending}
-        task={selectedTask}
-      />
+      ))}
       <Dialog open={confirmRegenerate !== null} title="确认再次生成" onOpenChange={(open) => !open && setConfirmRegenerate(null)}>
         <DialogHeader>
           <div>

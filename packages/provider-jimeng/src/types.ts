@@ -1,6 +1,28 @@
 export type EstimateInput = {
   promptText: string;
   assetUrls: string[];
+  assets?: ProviderInputAsset[];
+};
+
+export type ProviderInputAsset = {
+  bytes?: Uint8Array;
+  kind?: "audio" | "image" | "video";
+  mimeType?: string;
+  url?: string;
+};
+
+export type JimengCredential = {
+  apiKey?: string;
+  secretKey: string;
+};
+
+export type JimengGenerationParameters = {
+  modelId?: string;
+  mode?: string;
+  referenceMode?: string;
+  aspectRatio?: string;
+  resolution?: string;
+  durationSeconds?: number;
 };
 
 export type ProviderErrorCode =
@@ -15,8 +37,9 @@ export type EstimateResult = {
   estimatedSeconds: number;
 };
 
-export type SubmitGenerationInput = EstimateInput & {
-  secretKey: string;
+export type SubmitGenerationInput = EstimateInput &
+  JimengCredential & {
+    parameters?: JimengGenerationParameters | null;
 };
 
 export type SubmitGenerationResult = {
@@ -49,7 +72,7 @@ export type VideoProviderAdapter = {
   provider: "jimeng";
   estimate(input: EstimateInput): Promise<EstimateResult>;
   submit(input: SubmitGenerationInput): Promise<SubmitGenerationResult>;
-  getStatus(providerTaskId: string): Promise<ProviderTaskStatus>;
-  cancel(providerTaskId: string): Promise<void>;
+  getStatus(providerTaskId: string, credential: JimengCredential): Promise<ProviderTaskStatus>;
+  cancel(providerTaskId: string, credential?: JimengCredential): Promise<void>;
   downloadResult(providerTaskId: string, resultUrl: string): Promise<Uint8Array>;
 };

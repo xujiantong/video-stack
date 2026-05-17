@@ -8,6 +8,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   estimateGenerationResponseSchema,
   estimateGenerationRequestSchema,
+  expectedImageAssetCount,
   generationTaskParamsSchema,
   generationTaskSchema,
   listGenerationTasksQuerySchema,
@@ -47,10 +48,12 @@ function estimateCost(input: {
   const model = DEFAULT_MODEL_CAPABILITIES.find((item) => item.id === parameters.modelId) ?? DEFAULT_MODEL_CAPABILITIES[0]!;
   const durationCostCents = parameters.durationSeconds * model.pricing.perSecondCents;
   const assetCostCents = input.assetRefs.length * model.pricing.perAssetCents;
+  const promptCostCents =
+    model.pricing.baseCostCents === 0 && model.pricing.perSecondCents === 0 && model.pricing.perAssetCents === 0 ? 0 : input.promptText.length * 2;
   return {
     estimatedCostCents: Math.max(
       model.pricing.baseCostCents,
-      Math.ceil(model.pricing.baseCostCents + durationCostCents + assetCostCents + input.promptText.length * 2)
+      Math.ceil(model.pricing.baseCostCents + durationCostCents + assetCostCents + promptCostCents)
     ),
     costBreakdown: {
       baseCostCents: model.pricing.baseCostCents,
@@ -125,6 +128,17 @@ export function createGenerationRoutes(deps: GenerationRouteDeps): FastifyPlugin
         return reply.send(toPublicTask(task));
       } catch (error) {
         return sendError(reply, error, "取消任务失败，请稍后重试。");
+      }
+    });
+
+    app.delete("/generation/tasks/:taskId", async (request, reply) => {
+      try {
+        await deps.init?.();
+        const { taskId } = generationTaskParamsSchema.parse(request.params);
+        const task = await deps.repository.softDeleteGenerationTask(taskId);
+        return reply.send(toPublicTask(task));
+      } catch (error) {
+        return sendError(reply, error, "删除任务失败，请稍后重试。");
       }
     });
 
@@ -205,6 +219,17 @@ export function createGenerationRoutes(deps: GenerationRouteDeps): FastifyPlugin
       }
     });
 
+    app.delete("/generations/:taskId", async (request, reply) => {
+      try {
+        await deps.init?.();
+        const { taskId } = generationTaskParamsSchema.parse(request.params);
+        const task = await deps.repository.softDeleteGenerationTask(taskId);
+        return reply.send(toPublicTask(task));
+      } catch (error) {
+        return sendError(reply, error, "删除任务失败，请稍后重试。");
+      }
+    });
+
     app.post("/generations/:taskId/regenerate", async (request, reply) => {
       try {
         await deps.init?.();
@@ -274,6 +299,12 @@ async function validateModelAndAssets(
     throw apiError("MODEL_UNSUPPORTED_PARAMETER", "当前模型不支持这些参数，请调整模型、比例、分辨率或时长。");
   }
 
+  const expectedImages = expectedImageAssetCount(parameters);
+  const imageRefs = input.assetRefs.filter((asset) => asset.kind === "image");
+  if (input.assetRefs.length !== imageRefs.length || imageRefs.length !== expectedImages) {
+    throw apiError("MODEL_UNSUPPORTED_ASSET", assetRequirementMessage(expectedImages));
+  }
+
   for (const assetRef of input.assetRefs) {
     const asset = await repository.getAsset(assetRef.id);
     if (asset.projectId !== input.projectId) {
@@ -286,6 +317,12 @@ async function validateModelAndAssets(
       throw apiError("MODEL_UNSUPPORTED_ASSET", "素材类型和引用不一致，请重新选择参考内容。");
     }
   }
+}
+
+function assetRequirementMessage(expectedImages: number): string {
+  if (expectedImages === 0) return "文生视频不需要参考素材，请移除已引用素材。";
+  if (expectedImages === 1) return "当前生成类型需要引用 1 张已上传图片。";
+  return "首尾帧生成需要按顺序引用 2 张已上传图片。";
 }
 
 function validateSecondConfirm(input: ValidatedGenerationInput, estimatedCostCents: number, secret: string) {

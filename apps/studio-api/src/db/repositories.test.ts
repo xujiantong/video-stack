@@ -7,7 +7,8 @@ const ids = [
   "00000000-0000-4000-8000-000000000101",
   "00000000-0000-4000-8000-000000000401",
   "00000000-0000-4000-8000-000000000201",
-  "00000000-0000-4000-8000-000000000301"
+  "00000000-0000-4000-8000-000000000301",
+  "00000000-0000-4000-8000-000000000302"
 ];
 
 function createIdFactory() {
@@ -129,5 +130,41 @@ describe("createInMemoryStudioRepository", () => {
     expect(succeededTask.status).toBe("succeeded");
     expect(succeededTask.resultAssetId).toBe(resultAsset.id);
     expect(succeededTask.actualCostCents).toBe(900);
+  });
+
+  it("lists generation tasks from oldest to newest", async () => {
+    const first = new Date("2026-04-28T07:34:29.545Z");
+    const second = new Date("2026-04-28T07:35:29.545Z");
+    let current = first;
+    const repo = createInMemoryStudioRepository({
+      idFactory: createIdFactory(),
+      now: () => current
+    });
+
+    const user = await repo.createUser({ email: "creator@example.com" });
+    const project = await repo.createProject({ name: "影栈 Studio", userId: user.id });
+    const oldTask = await repo.createGenerationTask({
+      projectId: project.id,
+      userId: user.id,
+      provider: "jimeng",
+      promptDoc: { type: "doc", content: [] },
+      promptText: "旧任务",
+      assetRefs: [],
+      estimatedCostCents: 0,
+      status: "succeeded"
+    });
+    current = second;
+    const newTask = await repo.createGenerationTask({
+      projectId: project.id,
+      userId: user.id,
+      provider: "jimeng",
+      promptDoc: { type: "doc", content: [] },
+      promptText: "新任务",
+      assetRefs: [],
+      estimatedCostCents: 0,
+      status: "queued"
+    });
+
+    await expect(repo.listGenerationTasks(project.id)).resolves.toEqual([oldTask, newTask]);
   });
 });

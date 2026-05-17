@@ -78,9 +78,13 @@ export type StudioRepository = {
   getGenerationTask(taskId: string): Promise<GenerationTaskRecord>;
   listGenerationTasks(projectId: string): Promise<GenerationTaskRecord[]>;
   cancelGenerationTask(taskId: string): Promise<GenerationTaskRecord>;
+  softDeleteGenerationTask(taskId: string): Promise<GenerationTaskRecord>;
   softDeleteAsset(assetId: string): Promise<AssetRecord>;
+  markGenerationTaskRunning(taskId: string): Promise<GenerationTaskRecord>;
+  saveGenerationProviderTaskId(taskId: string, providerTaskId: string): Promise<GenerationTaskRecord>;
   markGenerationTaskFailed(taskId: string, errorCode: ErrorCode, errorMessage: string): Promise<GenerationTaskRecord>;
   markGenerationTaskSucceeded(taskId: string, resultAssetId: string, actualCostCents: number): Promise<GenerationTaskRecord>;
+  close?(): Promise<void>;
 };
 
 type RepositoryOptions = {
@@ -271,7 +275,7 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
       if (!projectRows.has(projectId)) throw notFound("项目", projectId);
       return [...taskRows.values()]
         .filter((row) => row.projectId === projectId && row.deletedAt === null)
-        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
     },
     async cancelGenerationTask(taskId) {
       const row = taskRows.get(taskId);
@@ -289,6 +293,18 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
       taskRows.set(taskId, updated);
       return updated;
     },
+    async softDeleteGenerationTask(taskId) {
+      const row = taskRows.get(taskId);
+      if (!row || row.deletedAt !== null) throw notFound("任务", taskId);
+      const deletedAt = now();
+      const updated: GenerationTaskRecord = {
+        ...row,
+        updatedAt: deletedAt,
+        deletedAt
+      };
+      taskRows.set(taskId, updated);
+      return updated;
+    },
     async softDeleteAsset(assetId) {
       const row = assetRows.get(assetId);
       if (!row) throw notFound("素材", assetId);
@@ -300,6 +316,32 @@ export function createInMemoryStudioRepository(options: RepositoryOptions = {}):
         deletedAt
       };
       assetRows.set(assetId, updated);
+      return updated;
+    },
+    async markGenerationTaskRunning(taskId) {
+      const row = taskRows.get(taskId);
+      if (!row) throw notFound("任务", taskId);
+      const updatedAt = now();
+      const updated: GenerationTaskRecord = {
+        ...row,
+        status: "running",
+        errorCode: null,
+        errorMessage: null,
+        updatedAt,
+        startedAt: row.startedAt ?? updatedAt
+      };
+      taskRows.set(taskId, updated);
+      return updated;
+    },
+    async saveGenerationProviderTaskId(taskId, providerTaskId) {
+      const row = taskRows.get(taskId);
+      if (!row) throw notFound("任务", taskId);
+      const updated: GenerationTaskRecord = {
+        ...row,
+        providerTaskId,
+        updatedAt: now()
+      };
+      taskRows.set(taskId, updated);
       return updated;
     },
     async markGenerationTaskFailed(taskId, errorCode, errorMessage) {

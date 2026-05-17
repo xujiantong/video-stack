@@ -111,7 +111,7 @@ export function ModelParameterToolbar({
 
   function changeParameter<Key extends ParameterKey>(field: Key, rawValue: string) {
     const value = field === "durationSeconds" ? Number(rawValue) : rawValue;
-    const nextParameters = { ...parameters, [field]: value } as GenerationParameters;
+    const nextParameters = normalizeModePair({ ...parameters, [field]: value } as GenerationParameters, field);
     onParametersChange(nextParameters);
     setNotice("");
   }
@@ -130,12 +130,12 @@ export function ModelParameterToolbar({
     );
 
     return (
-      <label className="relative inline-flex h-8 items-center">
+      <label className="relative inline-flex h-10 items-center">
         <span className="sr-only">{fieldLabels[field]}</span>
         <select
           aria-label={fieldLabels[field]}
           className={cn(
-            "h-8 appearance-none rounded-button border border-border bg-muted py-0 pl-3 pr-8 text-xs text-foreground outline-none transition",
+            "h-10 appearance-none rounded-button border border-border bg-muted py-0 pl-4 pr-9 text-sm text-foreground outline-none transition",
             "hover:border-primary/70 focus:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           )}
           value={String(parameters[field])}
@@ -153,14 +153,15 @@ export function ModelParameterToolbar({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="relative inline-flex h-8 items-center">
+        {renderSelect("mode", options.mode)}
+        <label className="relative inline-flex h-10 items-center">
           <span className="sr-only">模型</span>
           <select
             aria-label="模型"
             className={cn(
-              "h-8 appearance-none rounded-button border border-border bg-muted py-0 pl-3 pr-8 text-xs text-foreground outline-none transition",
+              "h-10 appearance-none rounded-button border border-border bg-muted py-0 pl-4 pr-9 text-sm text-foreground outline-none transition",
               "hover:border-primary/70 focus:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             )}
             value={selectedModel.id}
@@ -174,15 +175,28 @@ export function ModelParameterToolbar({
           </select>
           <ChevronDown className="pointer-events-none absolute right-2 size-3 text-muted-foreground" aria-hidden="true" />
         </label>
-        {renderSelect("mode", options.mode)}
         {renderSelect("referenceMode", options.referenceMode)}
         {renderSelect("aspectRatio", options.aspectRatio)}
         {renderSelect("resolution", options.resolution)}
         {renderSelect("durationSeconds", options.durationSeconds)}
       </div>
-      <p className={cn("min-h-4 text-xs text-warning", notice.length === 0 && "sr-only")} role="status">
+      <p className={cn("min-h-3 text-[11px] text-warning", notice.length === 0 && "sr-only")} role="status">
         {notice || "参数未调整。"}
       </p>
     </div>
   );
+}
+
+function normalizeModePair(parameters: GenerationParameters, changedField: ParameterKey): GenerationParameters {
+  if (changedField === "mode") {
+    if (parameters.mode === "text_to_video") return { ...parameters, referenceMode: "none" };
+    if (parameters.mode === "first_last_frame") return { ...parameters, referenceMode: "first_last_frame" };
+    return { ...parameters, referenceMode: "image" };
+  }
+  if (changedField === "referenceMode") {
+    if (parameters.referenceMode === "none") return { ...parameters, mode: "text_to_video" };
+    if (parameters.referenceMode === "first_last_frame") return { ...parameters, mode: "first_last_frame" };
+    if (parameters.mode === "text_to_video") return { ...parameters, mode: "image_to_video" };
+  }
+  return parameters;
 }

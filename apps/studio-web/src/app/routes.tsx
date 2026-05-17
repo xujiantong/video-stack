@@ -10,6 +10,6 @@ export function StudioRoutes() {
   if (view === "assets") return <AssetsPage />;
   if (view === "api") return <ApiSettingsPage />;
   if (view === "login") return <LoginPage />;
-  if (view === "settings" || view === "inspiration" || view === "canvas") return <PlaceholderPage />;
+  if (view === "settings" || view === "canvas") return <PlaceholderPage />;
   return <GeneratePage />;
 }

@@ -13,11 +13,20 @@ describe("model routes", () => {
     expect(response.json<unknown[]>()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "seedance-pro",
-          supportedModes: expect.arrayContaining(["reference_to_video"]),
+          id: "jimeng-video-v3-720p",
+          supportedModes: expect.arrayContaining(["text_to_video"]),
           supportedRatios: expect.arrayContaining(["16:9"]),
-          supportedResolutions: expect.arrayContaining(["1080p"]),
-          supportedDurations: expect.arrayContaining([15])
+          supportedResolutions: expect.arrayContaining(["720p"]),
+          supportedDurations: expect.arrayContaining([5])
+        }),
+        expect.objectContaining({
+          id: "jimeng-video-v3-1080p",
+          supportedResolutions: expect.arrayContaining(["1080p"])
+        }),
+        expect.objectContaining({
+          id: "jimeng-video-v3-pro-1080p",
+          supportedModes: ["text_to_video"],
+          supportedResolutions: expect.arrayContaining(["1080p"])
         })
       ])
     );

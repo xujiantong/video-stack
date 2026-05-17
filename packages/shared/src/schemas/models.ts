@@ -75,38 +75,64 @@ export function modelSupportsParameters(input: ModelCompatibilityInput): boolean
   );
 }
 
+export function expectedImageAssetCount(parameters: GenerationParameters): number {
+  if (parameters.mode === "text_to_video" && parameters.referenceMode === "none") return 0;
+  if (parameters.mode === "first_last_frame" || parameters.referenceMode === "first_last_frame") return 2;
+  if (parameters.mode === "image_to_video" || parameters.mode === "reference_to_video" || parameters.referenceMode === "image") return 1;
+  return 0;
+}
+
 export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
   {
-    id: "seedance-lite",
+    id: "jimeng-video-v3-720p",
     provider: "jimeng",
-    displayName: "Seedance Lite",
-    supportedModes: ["text_to_video", "image_to_video", "reference_to_video"],
-    supportedReferenceModes: ["none", "image"],
-    supportedRatios: ["16:9", "9:16", "1:1"],
-    supportedResolutions: ["720p", "1080p"],
+    displayName: "即梦AI-视频生成3.0 720P",
+    supportedModes: ["text_to_video", "image_to_video", "first_last_frame", "reference_to_video"],
+    supportedReferenceModes: ["none", "image", "first_last_frame"],
+    supportedRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    supportedResolutions: ["720p"],
     supportedDurations: [5, 10],
     supportsAudioReference: false,
+    maxAssetRefs: 2,
     pricing: {
-      baseCostCents: 300,
-      perSecondCents: 24,
-      perAssetCents: 120,
+      baseCostCents: 0,
+      perSecondCents: 0,
+      perAssetCents: 0,
       currency: "CNY"
     }
   },
   {
-    id: "seedance-pro",
+    id: "jimeng-video-v3-1080p",
     provider: "jimeng",
-    displayName: "Seedance Pro",
-    supportedModes: ["text_to_video", "image_to_video", "first_last_frame", "reference_to_video"],
-    supportedReferenceModes: ["none", "image", "audio", "image_audio", "first_last_frame"],
+    displayName: "即梦AI-视频生成3.0 1080P",
+    supportedModes: ["text_to_video", "image_to_video", "first_last_frame"],
+    supportedReferenceModes: ["none", "image", "first_last_frame"],
     supportedRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
     supportedResolutions: ["1080p"],
-    supportedDurations: [5, 10, 15],
-    supportsAudioReference: true,
+    supportedDurations: [5, 10],
+    supportsAudioReference: false,
+    maxAssetRefs: 2,
     pricing: {
-      baseCostCents: 500,
-      perSecondCents: 42,
-      perAssetCents: 160,
+      baseCostCents: 0,
+      perSecondCents: 0,
+      perAssetCents: 0,
+      currency: "CNY"
+    }
+  },
+  {
+    id: "jimeng-video-v3-pro-1080p",
+    provider: "jimeng",
+    displayName: "即梦AI-视频生成3.0 Pro 1080P",
+    supportedModes: ["text_to_video"],
+    supportedReferenceModes: ["none"],
+    supportedRatios: ["16:9", "9:16", "1:1"],
+    supportedResolutions: ["1080p"],
+    supportedDurations: [5, 10],
+    supportsAudioReference: false,
+    pricing: {
+      baseCostCents: 0,
+      perSecondCents: 0,
+      perAssetCents: 0,
       currency: "CNY"
     }
   }

@@ -6,6 +6,9 @@ import type { AssetService } from "../services/asset-service";
 const uploadParamsSchema = z.object({
   storageKey: z.string().min(1)
 });
+const assetParamsSchema = z.object({
+  assetId: z.string().uuid()
+});
 
 export function createAssetRoutes(service: AssetService): FastifyPluginAsync {
   return async (app) => {
@@ -42,6 +45,16 @@ export function createAssetRoutes(service: AssetService): FastifyPluginAsync {
         return reply.send(await service.listAssets(query.projectId));
       } catch (error) {
         return sendError(reply, error, "读取素材失败，请刷新后重试。");
+      }
+    });
+
+    app.get("/assets/:assetId/content", async (request, reply) => {
+      try {
+        const { assetId } = assetParamsSchema.parse(request.params);
+        const result = await service.readAssetContent(assetId);
+        return reply.header("Content-Type", result.mimeType).send(result.bytes);
+      } catch (error) {
+        return sendError(reply, error, "读取素材内容失败，请刷新后重试。");
       }
     });
 

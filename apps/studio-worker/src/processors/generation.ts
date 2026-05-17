@@ -1,5 +1,12 @@
-import { jimengAdapter, ProviderAdapterError, type ProviderTaskStatus, type VideoProviderAdapter } from "@video-stack/provider-jimeng";
-import { isRetryableErrorCode, type AssetMention, type ErrorCode } from "@video-stack/shared";
+import {
+  jimengAdapter,
+  ProviderAdapterError,
+  type JimengCredential,
+  type ProviderTaskStatus,
+  type SubmitGenerationInput,
+  type VideoProviderAdapter
+} from "@video-stack/provider-jimeng";
+import { isRetryableErrorCode, type AssetMention, type ErrorCode, type GenerationParameters } from "@video-stack/shared";
 
 export type GenerationJobPayload = {
   taskId: string;
@@ -14,6 +21,7 @@ export type StoredGenerationTask = {
   userId: string;
   provider: "jimeng";
   promptText: string;
+  parameters?: GenerationParameters | null;
   assetRefs: AssetMention[];
   status?: "queued" | "running" | "succeeded" | "failed" | "canceled";
 };
@@ -22,7 +30,7 @@ export type GenerationProcessorDeps = {
   adapter: VideoProviderAdapter;
   markTaskRunning(taskId: string): Promise<void>;
   loadGenerationTask(taskId: string): Promise<StoredGenerationTask>;
-  loadAndDecryptCredential(userId: string, provider: "jimeng"): Promise<{ secretKey: string }>;
+  loadAndDecryptCredential(userId: string, provider: "jimeng"): Promise<JimengCredential>;
   createReadonlyAssetUrls(assetRefs: AssetMention[]): Promise<string[]>;
   saveProviderTaskId(taskId: string, providerTaskId: string): Promise<void>;
   isTaskCanceled?(taskId: string): Promise<boolean>;
@@ -49,13 +57,16 @@ export async function processGenerationJob(
     }
     const credential = await deps.loadAndDecryptCredential(task.userId, task.provider);
     const assetUrls = await deps.createReadonlyAssetUrls(task.assetRefs);
-    const submitted = await deps.adapter.submit({
+    const submitInput: SubmitGenerationInput = {
       secretKey: credential.secretKey,
       promptText: task.promptText,
       assetUrls
-    });
+    };
+    if (credential.apiKey) submitInput.apiKey = credential.apiKey;
+    if (task.parameters) submitInput.parameters = task.parameters;
+    const submitted = await deps.adapter.submit(submitInput);
     await deps.saveProviderTaskId(task.id, submitted.providerTaskId);
-    const result = await pollProviderStatus(submitted.providerTaskId, task.id, deps);
+    const result = await pollProviderStatus(submitted.providerTaskId, credential, task.id, deps);
 
     if (result.status === "canceled") {
       await deps.adapter.cancel(submitted.providerTaskId);
@@ -88,12 +99,17 @@ export async function processGenerationJob(
   }
 }
 
-async function pollProviderStatus(providerTaskId: string, taskId: string, deps: GenerationProcessorDeps): Promise<ProviderTaskStatus> {
+async function pollProviderStatus(
+  providerTaskId: string,
+  credential: JimengCredential,
+  taskId: string,
+  deps: GenerationProcessorDeps
+): Promise<ProviderTaskStatus> {
   const maxStatusPolls = deps.maxStatusPolls ?? 3;
 
   for (let attempt = 1; attempt <= maxStatusPolls; attempt += 1) {
     if (await deps.isTaskCanceled?.(taskId)) return { status: "canceled" };
-    const status = await deps.adapter.getStatus(providerTaskId);
+    const status = await deps.adapter.getStatus(providerTaskId, credential);
     if (status.status !== "running") return status;
     await deps.waitBeforeNextPoll?.(attempt);
   }
@@ -122,7 +138,7 @@ function createDefaultDeps(): GenerationProcessorDeps {
       return { id: taskId, userId: crypto.randomUUID(), provider: "jimeng", promptText: "生成视频", assetRefs: [], status: "queued" };
     },
     async loadAndDecryptCredential() {
-      return { secretKey: "local-dev-secret" };
+      return { apiKey: "local-dev-api-key", secretKey: "local-dev-secret" };
     },
     async createReadonlyAssetUrls(assetRefs) {
       return assetRefs.map((asset) => `https://assets.example.com/${asset.id}`);

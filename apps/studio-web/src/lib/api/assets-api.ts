@@ -12,6 +12,8 @@ import {
 
 const assetsEndpoint = "/api/assets";
 
+export const assetsKey = (projectId: string) => ["assets", projectId] as const;
+
 export async function presignAssetUpload(input: CreateAssetUploadRequest): Promise<CreateAssetUploadResponse> {
   const payload = createAssetUploadRequestSchema.parse(input);
   const response = await fetch(`${assetsEndpoint}/presign`, {
@@ -66,4 +68,3 @@ async function readJson(response: Response): Promise<unknown> {
     return null;
   }
 }
-

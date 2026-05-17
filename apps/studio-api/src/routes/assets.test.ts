@@ -26,6 +26,8 @@ async function buildAssetTestServer() {
     STUDIO_STORAGE_MODE: "local",
     STUDIO_STORAGE_BUCKET: "studio-assets",
     STUDIO_S3_REGION: "auto",
+    STUDIO_GENERATION_MODE: "inline",
+    JIMENG_REQ_KEY: "jimeng_t2v_v30",
     PORT: 4000
   });
   const service = createAssetService({ repository, storage, userId, now: () => now, idFactory: () => assetId });

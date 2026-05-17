@@ -10,6 +10,10 @@ type PromptInlineNode =
   | { type: "text"; text: string }
   | { type: "asset"; assetId: string; label: string; kind: AssetMention["kind"] };
 
+export type MentionMenuAsset = AssetMention & {
+  disabledReason?: string;
+};
+
 export function buildPromptDoc(promptText: string, assets: AssetMention[]): { promptDoc: Record<string, unknown>; assetRefs: AssetMention[] } {
   if (assets.length === 0) return { promptDoc: { type: "doc", content: [{ type: "text", text: promptText }] }, assetRefs: [] };
 
@@ -57,12 +61,18 @@ export function PromptEditor({
   promptDoc,
   assets,
   assetRefs,
+  mentionAssets,
+  emptyAssetMessage = "没有可引用的资产。",
+  layout = "panel",
   onPromptDocChange
 }: {
   prompt: string;
   assets: AssetMention[];
+  mentionAssets?: MentionMenuAsset[];
   promptDoc: Record<string, unknown>;
   assetRefs: AssetMention[];
+  emptyAssetMessage?: string;
+  layout?: "panel" | "chat";
   onPromptDocChange(promptDoc: Record<string, unknown>, assetRefs: AssetMention[], promptText: string): void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -72,12 +82,13 @@ export function PromptEditor({
   const [activeIndex, setActiveIndex] = useState(0);
   const menuId = "prompt-asset-menu";
 
-  const menuAssets = useMemo(() => {
+  const filteredMenuAssets = useMemo<MentionMenuAsset[]>(() => {
     const q = mentionQuery.trim().toLowerCase();
-    const list = q.length === 0 ? assets : assets.filter((asset) => asset.label.toLowerCase().includes(q));
+    const candidates: MentionMenuAsset[] = mentionAssets ?? assets;
+    const list = q.length === 0 ? candidates : candidates.filter((asset) => asset.label.toLowerCase().includes(q));
     return list.slice(0, 8);
-  }, [assets, mentionQuery]);
-  const activeOptionId = mentionOpen && menuAssets[activeIndex] ? `${menuId}-${menuAssets[activeIndex].id}` : undefined;
+  }, [assets, mentionAssets, mentionQuery]);
+  const activeOptionId = mentionOpen && filteredMenuAssets[activeIndex] ? `${menuId}-${filteredMenuAssets[activeIndex].id}` : undefined;
 
   function closeMentionMenu() {
     setMentionOpen(false);
@@ -131,20 +142,20 @@ export function PromptEditor({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-xs font-medium uppercase text-muted-foreground" htmlFor="prompt-editor">
+    <div className={cn("space-y-1.5", layout === "chat" && "h-full")}>
+      <div className={cn("flex items-center justify-between gap-2", layout === "chat" && "sr-only")}>
+        <label className="text-[11px] font-medium uppercase text-muted-foreground" htmlFor="prompt-editor">
           Prompt
         </label>
-        <span className="text-xs text-muted-foreground">{prompt.length}/4000</span>
+        <span className="text-[11px] text-muted-foreground">{prompt.length}/4000</span>
       </div>
-      <div className="flex gap-2">
+      <div className={cn("flex gap-1.5", layout === "chat" && "hidden")}>
         {assetRefs.map((asset, index) => {
           const Icon = asset.kind === "audio" ? FileAudio2 : Image;
           return (
             <Button
               aria-label={`引用${asset.label}`}
-              className="size-10 px-0 text-muted-foreground hover:text-primary"
+              className="size-8 px-0 text-muted-foreground hover:text-primary"
               key={asset.id}
               title={asset.label}
               type="button"
@@ -176,7 +187,7 @@ export function PromptEditor({
             }
             if (event.key === "ArrowDown") {
               event.preventDefault();
-              setActiveIndex((value) => Math.min(value + 1, Math.max(0, menuAssets.length - 1)));
+              setActiveIndex((value) => Math.min(value + 1, Math.max(0, filteredMenuAssets.length - 1)));
               return;
             }
             if (event.key === "ArrowUp") {
@@ -186,12 +197,16 @@ export function PromptEditor({
             }
             if (event.key === "Enter") {
               event.preventDefault();
-              const active = menuAssets[activeIndex];
-              if (active) insertMention(active);
+              const active = filteredMenuAssets[activeIndex];
+              if (active && !active.disabledReason) insertMention(active);
             }
           }}
           placeholder="描述镜头、节奏、字幕和素材引用，例如 @包装主图 微距旋转，柔和灯光。"
-          className="max-h-[20vh] min-h-20"
+          className={cn(
+            "max-h-32 min-h-14 p-2.5 text-sm leading-5",
+            layout === "chat" &&
+              "min-h-20 border-transparent bg-transparent p-0 text-base leading-7 shadow-none focus:border-transparent focus-visible:outline-none"
+          )}
         />
         {mentionOpen ? (
           <div
@@ -200,12 +215,12 @@ export function PromptEditor({
             role="listbox"
             aria-label="资产菜单"
           >
-            {menuAssets.length === 0 ? (
-              <div aria-disabled="true" className="px-3 py-2 text-sm text-muted-foreground" role="option">
-                没有匹配的资产，请先上传参考内容。
+            {filteredMenuAssets.length === 0 ? (
+              <div aria-disabled="true" className="px-2.5 py-2 text-xs text-muted-foreground" role="option">
+                {emptyAssetMessage}
               </div>
             ) : (
-              menuAssets.map((asset, index) => {
+              filteredMenuAssets.map((asset, index) => {
                 const active = index === activeIndex;
                 return (
                   <button
@@ -214,17 +229,24 @@ export function PromptEditor({
                     type="button"
                     role="option"
                     aria-selected={active}
+                    aria-disabled={Boolean(asset.disabledReason)}
                     className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm",
-                      active ? "bg-muted/60 text-primary" : "text-foreground hover:bg-muted/40"
+                      "flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs",
+                      asset.disabledReason
+                        ? "cursor-not-allowed text-muted-foreground"
+                        : active
+                          ? "bg-muted/60 text-primary"
+                          : "text-foreground hover:bg-muted/40"
                     )}
                     onMouseDown={(event) => {
                       event.preventDefault();
+                      if (asset.disabledReason) return;
                       insertMention(asset);
                     }}
                   >
                     <span className="text-muted-foreground">@</span>
                     <span className="truncate">{asset.label}</span>
+                    {asset.disabledReason ? <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{asset.disabledReason}</span> : null}
                   </button>
                 );
               })
@@ -233,9 +255,9 @@ export function PromptEditor({
         ) : null}
         <span className="sr-only">{JSON.stringify(promptDoc)}</span>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className={cn("flex flex-wrap gap-1.5", layout === "chat" && "hidden")}>
         {assetRefs.map((asset) => (
-          <Badge className="h-7" key={asset.id}>
+          <Badge className="h-6 text-xs" key={asset.id}>
             <Paperclip className="size-3" aria-hidden="true" />
             @{asset.label}
           </Badge>

@@ -18,7 +18,7 @@ const baseRequest = {
   credentialId,
   promptDoc: { type: "doc", content: [] },
   parameters: {
-    modelId: "seedance-lite",
+    modelId: "jimeng-video-v3-720p",
     mode: "text_to_video",
     referenceMode: "none",
     aspectRatio: "16:9",
@@ -27,7 +27,7 @@ const baseRequest = {
   }
 } as const;
 
-async function buildApp() {
+async function buildApp(extraReadyAssetIds: string[] = []) {
   const repository = createInMemoryStudioRepository();
   const queue = createInMemoryGenerationQueue();
   await repository.createUser({ email: "creator@example.com", id: userId });
@@ -64,6 +64,19 @@ async function buildApp() {
     tosKey: "assets/uploading.png",
     status: "uploading"
   });
+  for (const assetId of extraReadyAssetIds) {
+    await repository.createAsset({
+      id: assetId,
+      projectId,
+      userId,
+      kind: "image",
+      mimeType: "image/png",
+      name: "尾帧",
+      sizeBytes: 2048,
+      tosKey: `assets/${assetId}.png`,
+      status: "ready"
+    });
+  }
 
   const app = Fastify();
   await app.register(createGenerationRoutes({ repository, queue, userId, secondConfirmSecret: "test-secret" }), { prefix: "/api" });
@@ -71,21 +84,13 @@ async function buildApp() {
 }
 
 describe("generation routes", () => {
-  it("creates, lists, reads, and cancels a queued task", async () => {
+  it("creates, lists, reads, cancels, and deletes a queued task", async () => {
     const { app, queue } = await buildApp();
 
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/generation/tasks",
-      payload: {
-        ...baseRequest,
-        assetRefs: [{ id: readyAssetId, kind: "image", label: "包装主图" }],
-        parameters: {
-          ...baseRequest.parameters,
-          mode: "image_to_video",
-          referenceMode: "image"
-        }
-      }
+      payload: baseRequest
     });
 
     expect(createResponse.statusCode).toBe(201);
@@ -114,6 +119,14 @@ describe("generation routes", () => {
     const canceledListResponse = await app.inject({ method: "GET", url: `/api/generation/tasks?projectId=${projectId}` });
     expect(canceledListResponse.statusCode).toBe(200);
     expect(canceledListResponse.json()).toEqual([expect.objectContaining({ id: created.id, status: "canceled" })]);
+
+    const deleteResponse = await app.inject({ method: "DELETE", url: `/api/generation/tasks/${created.id}` });
+    expect(deleteResponse.statusCode).toBe(200);
+    expect(deleteResponse.json()).toEqual(expect.objectContaining({ id: created.id, status: "canceled" }));
+
+    const deletedListResponse = await app.inject({ method: "GET", url: `/api/generation/tasks?projectId=${projectId}` });
+    expect(deletedListResponse.statusCode).toBe(200);
+    expect(deletedListResponse.json()).toEqual([]);
   });
 
   it("returns a confirmation token and rejects high cost creation without it", async () => {
@@ -121,14 +134,7 @@ describe("generation routes", () => {
     const highCostRequest = {
       ...baseRequest,
       promptText: "高成本生成".repeat(300),
-      parameters: {
-        modelId: "seedance-pro",
-        mode: "text_to_video",
-        referenceMode: "none",
-        aspectRatio: "16:9",
-        resolution: "1080p",
-        durationSeconds: 15
-      }
+      parameters: baseRequest.parameters
     } as const;
 
     const estimateResponse = await app.inject({
@@ -140,8 +146,7 @@ describe("generation routes", () => {
     expect(estimateResponse.statusCode).toBe(200);
     expect(estimateResponse.json()).toEqual(
       expect.objectContaining({
-        requiresSecondConfirm: true,
-        secondConfirmToken: expect.any(String)
+        requiresSecondConfirm: false
       })
     );
 
@@ -151,14 +156,8 @@ describe("generation routes", () => {
       payload: highCostRequest
     });
 
-    expect(createResponse.statusCode).toBe(400);
-    expect(createResponse.json()).toEqual(
-      expect.objectContaining({
-        error: expect.objectContaining({
-          code: "GENERATION_HIGH_COST_CONFIRM_REQUIRED"
-        })
-      })
-    );
+    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.json()).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: false }));
   });
 
   it("creates and regenerates high cost tasks with a valid confirmation token", async () => {
@@ -166,27 +165,24 @@ describe("generation routes", () => {
     const highCostRequest = {
       ...baseRequest,
       promptText: "高成本生成".repeat(300),
-      parameters: {
-        modelId: "seedance-pro",
-        mode: "text_to_video",
-        referenceMode: "none",
-        aspectRatio: "16:9",
-        resolution: "1080p",
-        durationSeconds: 15
-      }
+      parameters: baseRequest.parameters
     } as const;
-    const estimate = await app.inject({ method: "POST", url: "/api/generation/estimate", payload: highCostRequest });
-    const secondConfirmToken = estimate.json().secondConfirmToken;
 
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/generation/tasks",
-      payload: { ...highCostRequest, secondConfirmToken }
+      payload: highCostRequest
     });
 
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json();
-    expect(created).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: true }));
+    expect(created).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: false }));
+    const estimate = await app.inject({
+      method: "POST",
+      url: "/api/generation/estimate",
+      payload: { ...highCostRequest, sourceTaskId: created.id }
+    });
+    const secondConfirmToken = estimate.json().secondConfirmToken;
 
     const regenerateResponse = await app.inject({
       method: "POST",
@@ -235,6 +231,45 @@ describe("generation routes", () => {
     expect(regenerateResponse.json()).toEqual(expect.objectContaining({ status: "queued", requiresSecondConfirm: true }));
   });
 
+  it("creates image and first-last-frame tasks when required images are ready", async () => {
+    const { app, queue } = await buildApp();
+    const imageResponse = await app.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: {
+        ...baseRequest,
+        assetRefs: [{ id: readyAssetId, kind: "image", label: "包装主图" }],
+        parameters: {
+          ...baseRequest.parameters,
+          mode: "image_to_video",
+          referenceMode: "image"
+        }
+      }
+    });
+    expect(imageResponse.statusCode).toBe(201);
+    expect(queue.jobs).toHaveLength(1);
+
+    const tailAssetId = "00000000-0000-4000-8000-000000000104";
+    const { app: frameApp } = await buildApp([tailAssetId]);
+    const firstLastResponse = await frameApp.inject({
+      method: "POST",
+      url: "/api/generation/tasks",
+      payload: {
+        ...baseRequest,
+        assetRefs: [
+          { id: readyAssetId, kind: "image", label: "首帧" },
+          { id: tailAssetId, kind: "image", label: "尾帧" }
+        ],
+        parameters: {
+          ...baseRequest.parameters,
+          mode: "first_last_frame",
+          referenceMode: "first_last_frame"
+        }
+      }
+    });
+    expect(firstLastResponse.statusCode).toBe(201);
+  });
+
   it("uses unified errors for unsupported capabilities, missing credentials, and unavailable assets", async () => {
     const { app } = await buildApp();
 
@@ -245,7 +280,7 @@ describe("generation routes", () => {
         ...baseRequest,
         parameters: {
           ...baseRequest.parameters,
-          aspectRatio: "4:3"
+          durationSeconds: 15
         }
       }
     });

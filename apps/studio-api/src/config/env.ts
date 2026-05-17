@@ -10,6 +10,10 @@ const envSchema = z.object({
   STUDIO_S3_REGION: z.string().min(1).default("auto"),
   STUDIO_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   STUDIO_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  STUDIO_GENERATION_MODE: z.enum(["inline", "worker"]).default("inline"),
+  JIMENG_ACCESS_KEY_ID: z.string().min(1).optional(),
+  JIMENG_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  JIMENG_REQ_KEY: z.string().min(1).default("jimeng_t2v_v30"),
   PORT: z.coerce.number().int().positive().default(4000)
 });
 

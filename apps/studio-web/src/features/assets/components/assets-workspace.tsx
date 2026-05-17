@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { Asset } from "@video-stack/shared";
 import { AssetTable } from "./asset-table";
 import { AssetsToolbar } from "./assets-toolbar";
 import type { AssetFilter, AssetTab, PendingDelete, TaskFilter } from "./assets-workspace-types";
@@ -8,9 +9,11 @@ import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { TaskTable } from "./task-table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { completeAssetUpload, presignAssetUpload, uploadAssetBytes } from "@/lib/api/assets-api";
+import { assetsKey, completeAssetUpload, listAssets, presignAssetUpload, uploadAssetBytes } from "@/lib/api/assets-api";
 import { generationTasksKey, listGenerationTasks } from "@/lib/api/generation-api";
 import { useComposerStore, type StudioAsset } from "@/lib/stores/composer-store";
+
+const taskPollIntervalMs = 1_500;
 
 export function AssetsWorkspace() {
   const [activeTab, setActiveTab] = useState<AssetTab>("assets");
@@ -31,9 +34,25 @@ export function AssetsWorkspace() {
   const setView = useComposerStore((state) => state.setView);
   const tasksQuery = useQuery({
     queryKey: generationTasksKey(projectId),
-    queryFn: () => listGenerationTasks(projectId)
+    queryFn: () => listGenerationTasks(projectId),
+    refetchInterval: (query) =>
+      query.state.data?.some((task) => task.status === "queued" || task.status === "running") ? taskPollIntervalMs : false,
+    refetchIntervalInBackground: true
+  });
+  const assetsQuery = useQuery({
+    queryKey: assetsKey(projectId),
+    queryFn: () => listAssets(projectId),
+    refetchInterval: (query) =>
+      tasksQuery.data?.some((task) => task.status === "queued" || task.status === "running") || query.state.data?.some((asset) => asset.status === "uploading")
+        ? taskPollIntervalMs
+        : false,
+    refetchIntervalInBackground: true
   });
   const tasks = (tasksQuery.data ?? []).filter((task) => !deletedTaskIds.includes(task.id));
+  const completedResultAssetIds = tasks
+    .map((task) => task.resultAssetId)
+    .filter((assetId): assetId is string => Boolean(assetId))
+    .join(",");
   const normalizedSearch = searchText.trim().toLowerCase();
   const filteredAssets = assets.filter((asset) => {
     const matchesSearch = normalizedSearch.length === 0 || asset.label.toLowerCase().includes(normalizedSearch);
@@ -46,6 +65,17 @@ export function AssetsWorkspace() {
     return matchesSearch && matchesStatus;
   });
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
+
+  useEffect(() => {
+    for (const asset of assetsQuery.data ?? []) {
+      upsertAsset(toStudioAsset(asset));
+    }
+  }, [assetsQuery.data, upsertAsset]);
+
+  useEffect(() => {
+    if (!completedResultAssetIds) return;
+    void assetsQuery.refetch();
+  }, [assetsQuery.refetch, completedResultAssetIds]);
 
   async function uploadOne(file: File): Promise<string | null> {
     let previewUrl: string | undefined;
@@ -77,6 +107,7 @@ export function AssetsWorkspace() {
       await uploadAssetBytes(presign.uploadUrl, presign.uploadHeaders, file);
       await completeAssetUpload({ assetId: presign.assetId, projectId, storageKey: presign.storageKey });
       setAssetStatus(presign.assetId, "ready");
+      void assetsQuery.refetch();
       return presign.assetId;
     } catch (error) {
       if (nextAssetId) setAssetStatus(nextAssetId, "failed", error instanceof Error ? error.message : "上传失败，请重试。");
@@ -184,4 +215,38 @@ export function AssetsWorkspace() {
       <DeleteConfirmDialog pendingDelete={pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)} onConfirm={confirmDelete} />
     </div>
   );
+}
+
+function toStudioAsset(asset: Asset): StudioAsset {
+  return {
+    id: asset.id,
+    kind: asset.kind,
+    label: asset.name.replace(/\.[^/.]+$/, "") || asset.name,
+    fileType: toFileType(asset.mimeType),
+    sizeLabel: toSizeLabel(asset.sizeBytes),
+    references: 0,
+    createdAt: formatAssetCreatedAt(asset.createdAt),
+    status: toStudioAssetStatus(asset.status),
+    ...(asset.status === "ready" ? { previewUrl: `/api/assets/${asset.id}/content` } : {})
+  };
+}
+
+function toStudioAssetStatus(status: Asset["status"]): StudioAsset["status"] {
+  if (status === "ready" || status === "uploading") return status;
+  return "failed";
+}
+
+function formatAssetCreatedAt(value: string): string {
+  const createdAt = new Date(value);
+  if (Number.isNaN(createdAt.getTime())) return "未知时间";
+  const now = Date.now();
+  const diffMs = now - createdAt.getTime();
+  if (diffMs >= 0 && diffMs < 60_000) return "刚刚";
+  if (diffMs >= 0 && diffMs < 60 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
+  return createdAt.toLocaleString("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit"
+  });
 }

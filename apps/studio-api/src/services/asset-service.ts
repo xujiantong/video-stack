@@ -27,9 +27,10 @@ export type AssetService = {
   completeUpload(input: CompleteAssetUploadRequest): Promise<Asset>;
   listAssets(projectId: string): Promise<Asset[]>;
   acceptLocalUpload(storageKey: string, bytes: Buffer): Promise<void>;
+  readAssetContent(assetId: string): Promise<{ bytes: Buffer; mimeType: string }>;
 };
 
-export function createAssetService({ repository, storage, userId, now = () => new Date(), idFactory = crypto.randomUUID }: AssetServiceOptions): AssetService {
+export function createAssetService({ repository, storage, userId, now = () => new Date(), idFactory = () => crypto.randomUUID() }: AssetServiceOptions): AssetService {
   return {
     async createUpload(input) {
       const payload = createAssetUploadRequestSchema.parse(input);
@@ -81,6 +82,19 @@ export function createAssetService({ repository, storage, userId, now = () => ne
     async acceptLocalUpload(storageKey, bytes) {
       if (!storage.acceptLocalUpload) return;
       await storage.acceptLocalUpload(storageKey, bytes);
+    },
+    async readAssetContent(assetId) {
+      const row = await repository.getAsset(assetId);
+      if (row.status !== "ready") {
+        throw apiError("ASSET_NOT_READY", "素材仍在上传或已失效，请等待上传完成后再查看。");
+      }
+      if (!storage.readObject) {
+        throw apiError("VALIDATION_ERROR", "当前存储不支持读取素材内容。");
+      }
+      return {
+        bytes: await storage.readObject(row.tosKey),
+        mimeType: row.mimeType
+      };
     }
   };
 }
@@ -121,4 +135,3 @@ function apiError(code: ErrorCode, message: string, details?: Record<string, unk
     }
   });
 }
-

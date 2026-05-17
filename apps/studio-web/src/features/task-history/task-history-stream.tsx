@@ -1,11 +1,13 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleDashed, Clock3, MoreHorizontal, PenLine, Play, RefreshCcw, XCircle } from "lucide-react";
-import type { GenerationTask } from "@video-stack/shared";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, CircleDashed, Clock3, PenLine, Play, RefreshCcw, Trash2, XCircle } from "lucide-react";
+import type { Asset, GenerationTask } from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { generationTaskKey, generationTasksKey, getGenerationTask, listGenerationTasks } from "@/lib/api/generation-api";
+import { assetsKey, listAssets } from "@/lib/api/assets-api";
+import { deleteGenerationTask, generationTaskKey, generationTasksKey, getGenerationTask, listGenerationTasks } from "@/lib/api/generation-api";
+import { useComposerStore, type StudioAsset } from "@/lib/stores/composer-store";
 import { cn } from "@/lib/utils";
 
 const taskPollIntervalMs = 1_500;
@@ -52,6 +54,16 @@ function TaskHistoryCard({
   task: GenerationTask;
 }) {
   const queryClient = useQueryClient();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const upsertAsset = useComposerStore((state) => state.upsertAsset);
+  const deleteMutation = useMutation({
+    mutationFn: deleteGenerationTask,
+    onSuccess(deletedTask) {
+      queryClient.setQueryData<GenerationTask[]>(generationTasksKey(deletedTask.projectId), (rows) => rows?.filter((row) => row.id !== deletedTask.id) ?? []);
+      queryClient.removeQueries({ queryKey: generationTaskKey(deletedTask.id) });
+    }
+  });
   const detailQuery = useQuery({
     queryKey: generationTaskKey(task.id),
     queryFn: () => getGenerationTask(task.id),
@@ -62,12 +74,40 @@ function TaskHistoryCard({
   });
   const currentTask = isActiveTask(task.status) ? (detailQuery.data ?? task) : task;
   useEffect(() => {
-    if (!detailQuery.data || isActiveTask(detailQuery.data.status)) return;
-    queryClient.setQueryData<GenerationTask[]>(generationTasksKey(task.projectId), (rows) => rows?.map((row) => (row.id === detailQuery.data?.id ? detailQuery.data : row)) ?? rows);
-  }, [detailQuery.data, queryClient, task.projectId]);
+    if (isActiveTask(currentTask.status)) return;
+    queryClient.setQueryData<GenerationTask[]>(generationTasksKey(task.projectId), (rows) => rows?.map((row) => (row.id === currentTask.id ? currentTask : row)) ?? rows);
+    if (!currentTask.resultAssetId) return;
+    void queryClient.invalidateQueries({ queryKey: assetsKey(task.projectId) });
+    void listAssets(task.projectId).then((assets) => {
+      for (const asset of assets) {
+        upsertAsset(toStudioAsset(asset));
+      }
+    });
+  }, [currentTask, queryClient, task.projectId, upsertAsset]);
   const parameters = currentTask.parameters;
   const failureMessage =
     currentTask.status === "failed" ? (currentTask.errorMessage ? `${currentTask.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。") : null;
+  const resultPreviewUrl = currentTask.resultAssetId ? `/api/assets/${currentTask.resultAssetId}/content#t=0.1` : null;
+  const canPlayPreview = currentTask.status === "succeeded" && Boolean(resultPreviewUrl);
+
+  async function handlePreviewClick() {
+    if (!canPlayPreview) {
+      onFocus?.(currentTask);
+      return;
+    }
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      await video.play();
+      return;
+    }
+    video.pause();
+  }
+
+  function handleDelete() {
+    if (!window.confirm("确定删除这个任务吗？")) return;
+    deleteMutation.mutate(currentTask.id);
+  }
 
   return (
     <article
@@ -97,14 +137,32 @@ function TaskHistoryCard({
         </Badge>
       </div>
       <button
-        aria-label={`查看任务：${currentTask.promptText}`}
+        aria-label={canPlayPreview ? `${isPlaying ? "暂停" : "播放"}生成结果：${currentTask.promptText}` : `查看任务：${currentTask.promptText}`}
         className="block w-full bg-background text-left"
-        onClick={() => onFocus?.(currentTask)}
+        onClick={() => void handlePreviewClick()}
         type="button"
       >
-        <div className={cn("studio-preview-bg grid place-items-center", compact ? "h-28" : "aspect-video")}>
-          {currentTask.status === "succeeded" ? (
-            <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
+        <div className={cn("studio-preview-bg relative grid overflow-hidden place-items-center", compact ? "h-28" : "aspect-video")}>
+          {currentTask.status === "succeeded" && resultPreviewUrl ? (
+            <>
+              <video
+                ref={videoRef}
+                aria-label="生成结果预览"
+                className="absolute inset-0 h-full w-full bg-black object-cover"
+                muted
+                onEnded={() => setIsPlaying(false)}
+                onPause={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                playsInline
+                preload="metadata"
+                src={resultPreviewUrl}
+              />
+              <span className={cn("relative z-10 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-primary-ring", isPlaying && "opacity-0")}>
+                <Play className="size-5 fill-current" aria-hidden="true" />
+              </span>
+            </>
+          ) : currentTask.status === "succeeded" ? (
+            <span className="relative z-10 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
               <Play className="size-5 fill-current" aria-hidden="true" />
             </span>
           ) : (
@@ -135,14 +193,34 @@ function TaskHistoryCard({
               <RefreshCcw className="size-3" aria-hidden="true" />
               再次生成
             </Button>
-            <Button aria-label="更多操作" className="size-8 px-0" type="button" variant="ghost">
-              <MoreHorizontal className="size-4" aria-hidden="true" />
+            <Button aria-label="删除任务" className="size-8 px-0 text-danger" disabled={deleteMutation.isPending} onClick={handleDelete} type="button" variant="ghost">
+              <Trash2 className="size-4" aria-hidden="true" />
             </Button>
           </div>
         </div>
       </div>
     </article>
   );
+}
+
+function toStudioAsset(asset: Asset): StudioAsset {
+  return {
+    id: asset.id,
+    kind: asset.kind,
+    label: asset.name.replace(/\.[^/.]+$/, "") || asset.name,
+    fileType: asset.kind,
+    sizeLabel: toSizeLabel(asset.sizeBytes),
+    references: 0,
+    createdAt: "刚刚",
+    status: asset.status === "ready" || asset.status === "uploading" ? asset.status : "failed",
+    ...(asset.status === "ready" ? { previewUrl: `/api/assets/${asset.id}/content` } : {})
+  };
+}
+
+function toSizeLabel(sizeBytes: number): string {
+  if (sizeBytes >= 1024 * 1024) return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (sizeBytes >= 1024) return `${Math.round(sizeBytes / 1024)} KB`;
+  return `${sizeBytes} B`;
 }
 
 export function TaskHistoryStream({ pollIntervalMs = taskPollIntervalMs, projectId }: { pollIntervalMs?: number; projectId: string }) {

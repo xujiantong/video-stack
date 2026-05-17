@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { DEFAULT_GENERATION_PARAMETERS, type AssetMention, type GenerationParameters } from "@video-stack/shared";
 
-export type StudioView = "inspiration" | "generate" | "assets" | "canvas" | "settings" | "api" | "login";
+export type StudioView = "generate" | "assets" | "canvas" | "settings" | "api" | "login";
 
 export type StudioAsset = AssetMention & {
   fileType: "image" | "audio" | "video";
@@ -24,6 +24,7 @@ type ComposerState = {
   setPrompt(prompt: string): void;
   setPromptDoc(promptDoc: Record<string, unknown>, assetRefs: AssetMention[], promptText: string): void;
   setParameters(parameters: GenerationParameters): void;
+  setAssets(assets: StudioAsset[]): void;
   upsertAsset(asset: StudioAsset): void;
   setAssetStatus(assetId: string, status: StudioAsset["status"], uploadError?: string): void;
   removeAsset(assetId: string): void;
@@ -35,38 +36,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   promptDoc: { type: "doc", content: [{ type: "text", text: "生成 8 秒产品展示视频，突出包装细节和柔和灯光。" }] },
   assetRefs: [],
   parameters: DEFAULT_GENERATION_PARAMETERS,
-  assets: [
-    {
-      id: "00000000-0000-4000-8000-000000000101",
-      kind: "image",
-      label: "包装主图",
-      fileType: "image",
-      sizeLabel: "2.4 MB",
-      references: 5,
-      createdAt: "今天 10:12",
-      status: "ready"
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000102",
-      kind: "image",
-      label: "场景参考",
-      fileType: "image",
-      sizeLabel: "3.1 MB",
-      references: 3,
-      createdAt: "今天 10:18",
-      status: "uploading"
-    },
-    {
-      id: "00000000-0000-4000-8000-000000000103",
-      kind: "audio",
-      label: "旁白音色",
-      fileType: "audio",
-      sizeLabel: "8.6 MB",
-      references: 2,
-      createdAt: "昨天 21:45",
-      status: "ready"
-    }
-  ],
+  assets: [],
   setView(view) {
     set({ view });
   },
@@ -78,6 +48,15 @@ export const useComposerStore = create<ComposerState>((set) => ({
   },
   setParameters(parameters) {
     set({ parameters });
+  },
+  setAssets(assets) {
+    set((state) => {
+      const assetIds = new Set(assets.map((asset) => asset.id));
+      return {
+        assets,
+        assetRefs: state.assetRefs.filter((assetRef) => assetIds.has(assetRef.id))
+      };
+    });
   },
   upsertAsset(asset) {
     set((state) => {

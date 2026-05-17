@@ -2,6 +2,7 @@ import {
   DEFAULT_GENERATION_PARAMETERS,
   DEFAULT_MODEL_CAPABILITIES,
   HIGH_COST_THRESHOLD_CENTS,
+  apiErrorSchema,
   type AssetMention,
   type CreateGenerationRequest,
   type EstimateGenerationResponse,
@@ -14,82 +15,14 @@ export const generationTasksKey = (projectId: string) => ["generation-tasks", pr
 export const generationTaskKey = (taskId: string) => ["generation-task", taskId] as const;
 
 const defaultProjectId = "00000000-0000-4000-8000-000000000001";
-const mockNow = new Date().toISOString();
-const mockTasks: GenerationTask[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000201",
-    projectId: defaultProjectId,
-    provider: "jimeng",
-    promptText: "生成 8 秒产品展示视频",
-    parameters: DEFAULT_GENERATION_PARAMETERS,
-    assetRefs: [],
-    status: "succeeded",
-    estimatedCostCents: 860,
-    actualCostCents: 860,
-    requiresSecondConfirm: false,
-    resultAssetId: "00000000-0000-4000-8000-000000000301",
-    errorMessage: null,
-    createdAt: mockNow,
-    updatedAt: mockNow
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000202",
-    projectId: defaultProjectId,
-    provider: "jimeng",
-    promptText: "把镜头改成俯拍，增加字幕",
-    parameters: DEFAULT_GENERATION_PARAMETERS,
-    assetRefs: [],
-    status: "running",
-    estimatedCostCents: 1120,
-    actualCostCents: null,
-    requiresSecondConfirm: false,
-    resultAssetId: null,
-    errorMessage: null,
-    createdAt: mockNow,
-    updatedAt: mockNow
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000203",
-    projectId: defaultProjectId,
-    provider: "jimeng",
-    promptText: "使用 @包装主图 展示产品旋转，镜头从微距拉到全景。",
-    parameters: DEFAULT_GENERATION_PARAMETERS,
-    assetRefs: [],
-    status: "queued",
-    estimatedCostCents: 1480,
-    actualCostCents: null,
-    requiresSecondConfirm: false,
-    resultAssetId: null,
-    errorMessage: null,
-    createdAt: mockNow,
-    updatedAt: mockNow
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000204",
-    projectId: defaultProjectId,
-    provider: "jimeng",
-    promptText: "当前模型不支持音频参考，请移除 @旁白音色 或切换模型。",
-    parameters: DEFAULT_GENERATION_PARAMETERS,
-    assetRefs: [],
-    status: "failed",
-    estimatedCostCents: 980,
-    actualCostCents: null,
-    requiresSecondConfirm: false,
-    resultAssetId: null,
-    errorMessage: "当前模型不支持音频参考，请移除音频或切换模型。",
-    createdAt: mockNow,
-    updatedAt: mockNow
-  }
-];
-const mockDetailReads = new Map<string, number>();
 
 export async function listGenerationModels(): Promise<ModelCapability[]> {
   try {
     const response = await fetch("/api/models");
-    if (!response.ok) return DEFAULT_MODEL_CAPABILITIES;
-    return (await response.json()) as ModelCapability[];
+    if (!response.ok) return DEFAULT_MODEL_CAPABILITIES.filter((model) => model.enabled);
+    return ((await response.json()) as ModelCapability[]).filter((model) => model.enabled);
   } catch {
-    return DEFAULT_MODEL_CAPABILITIES;
+    return DEFAULT_MODEL_CAPABILITIES.filter((model) => model.enabled);
   }
 }
 
@@ -102,10 +35,12 @@ export async function estimateGeneration(input: {
 }): Promise<EstimateGenerationResponse> {
   const { promptText, assetRefs, parameters } = input;
   const model = DEFAULT_MODEL_CAPABILITIES.find((item) => item.id === parameters.modelId) ?? DEFAULT_MODEL_CAPABILITIES[0]!;
+  const promptCostCents =
+    model.pricing.baseCostCents === 0 && model.pricing.perSecondCents === 0 && model.pricing.perAssetCents === 0 ? 0 : promptText.length * 2;
   const fallbackCostCents = Math.max(
     model.pricing.baseCostCents,
     model.pricing.baseCostCents +
-      promptText.length * 2 +
+      promptCostCents +
       assetRefs.length * model.pricing.perAssetCents +
       parameters.durationSeconds * model.pricing.perSecondCents
   );
@@ -131,63 +66,15 @@ export async function estimateGeneration(input: {
 }
 
 export async function listGenerationTasks(projectId: string): Promise<GenerationTask[]> {
-  try {
-    const response = await fetch(`/api/generation/tasks?${new URLSearchParams({ projectId })}`);
-    if (!response.ok) throw new Error("读取任务列表失败，请刷新后重试。");
-    return (await response.json()) as GenerationTask[];
-  } catch {
-    return mockTasks.filter((task) => task.projectId === projectId);
-  }
+  const response = await fetch(`/api/generation/tasks?${new URLSearchParams({ projectId })}`);
+  if (!response.ok) throw new Error(await readApiError(response, "读取任务列表失败，请刷新后重试。"));
+  return (await response.json()) as GenerationTask[];
 }
 
 export async function getGenerationTask(taskId: string): Promise<GenerationTask> {
-  try {
-    const response = await fetch(`/api/generation/tasks/${taskId}`);
-    if (!response.ok) throw new Error("读取任务详情失败，请刷新后重试。");
-    return (await response.json()) as GenerationTask;
-  } catch {
-    const task = mockTasks.find((item) => item.id === taskId);
-    if (!task) throw new Error("任务不存在，请刷新后重试。");
-    const reads = (mockDetailReads.get(taskId) ?? 0) + 1;
-    mockDetailReads.set(taskId, reads);
-    if (task.status === "running" && reads > 1) {
-      const updated = {
-        ...task,
-        status: "succeeded" as const,
-        actualCostCents: task.estimatedCostCents,
-        resultAssetId: "00000000-0000-4000-8000-000000000302",
-        updatedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString()
-      };
-      const index = mockTasks.findIndex((item) => item.id === taskId);
-      if (index >= 0) mockTasks[index] = updated;
-      return updated;
-    }
-    return task;
-  }
-}
-
-function createMockQueuedTask(input: CreateGenerationRequest & { fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm"> }): GenerationTask {
-  const now = new Date().toISOString();
-  const task: GenerationTask = {
-    id: crypto.randomUUID(),
-    projectId: input.projectId,
-    provider: input.provider,
-    promptDoc: input.promptDoc,
-    promptText: input.promptText,
-    parameters: input.parameters,
-    assetRefs: input.assetRefs,
-    status: "queued",
-    estimatedCostCents: input.fallbackEstimate?.estimatedCostCents ?? Math.max(300, input.promptText.length * 2),
-    actualCostCents: null,
-    requiresSecondConfirm: input.fallbackEstimate?.requiresSecondConfirm ?? false,
-    resultAssetId: null,
-    errorMessage: null,
-    createdAt: now,
-    updatedAt: now
-  };
-  mockTasks.unshift(task);
-  return task;
+  const response = await fetch(`/api/generation/tasks/${taskId}`);
+  if (!response.ok) throw new Error(await readApiError(response, "读取任务详情失败，请刷新后重试。"));
+  return (await response.json()) as GenerationTask;
 }
 
 export async function createGenerationTask(
@@ -195,19 +82,14 @@ export async function createGenerationTask(
     fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm">;
   }
 ): Promise<GenerationTask> {
-  let response: Response;
-  try {
-    response = await fetch("/api/generation/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input)
-    });
-  } catch {
-    return createMockQueuedTask(input);
-  }
+  const response = await fetch("/api/generation/tasks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
 
   if (!response.ok) {
-    throw new Error("创建任务失败，请检查参数后重试。");
+    throw new Error(await readApiError(response, "创建任务失败，请检查参数后重试。"));
   }
 
   return (await response.json()) as GenerationTask;
@@ -219,20 +101,34 @@ export async function regenerateGenerationTask(
     fallbackEstimate?: Pick<EstimateGenerationResponse, "estimatedCostCents" | "requiresSecondConfirm">;
   }
 ): Promise<GenerationTask> {
-  let response: Response;
-  try {
-    response = await fetch(`/api/generation/tasks/${sourceTaskId}/regenerate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input)
-    });
-  } catch {
-    return createMockQueuedTask({ ...input, fallbackEstimate: { estimatedCostCents: input.fallbackEstimate?.estimatedCostCents ?? Math.max(300, input.promptText.length * 2), requiresSecondConfirm: true } });
-  }
+  const response = await fetch(`/api/generation/tasks/${sourceTaskId}/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
 
   if (!response.ok) {
-    throw new Error("再次生成失败，请重新预估费用后再试。");
+    throw new Error(await readApiError(response, "再次生成失败，请重新预估费用后再试。"));
   }
 
   return (await response.json()) as GenerationTask;
+}
+
+export async function deleteGenerationTask(taskId: string): Promise<GenerationTask> {
+  const response = await fetch(`/api/generation/tasks/${taskId}`, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "删除任务失败，请稍后重试。"));
+  }
+  return (await response.json()) as GenerationTask;
+}
+
+async function readApiError(response: Response, fallbackMessage: string): Promise<string> {
+  try {
+    const parsed = apiErrorSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.error.message : fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
 }

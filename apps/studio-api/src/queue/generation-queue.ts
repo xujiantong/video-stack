@@ -25,6 +25,25 @@ export function createBullMqGenerationQueue(redisUrl: string): GenerationQueue {
   };
 }
 
+export function createInlineGenerationQueue(run: (payload: GenerationJobPayload) => Promise<void>): GenerationQueue {
+  const running = new Set<Promise<void>>();
+  return {
+    async enqueue(payload) {
+      const task = run(payload)
+        .catch((error) => {
+          console.error(error);
+        })
+        .finally(() => {
+          running.delete(task);
+        });
+      running.add(task);
+    },
+    async close() {
+      await Promise.allSettled([...running]);
+    }
+  };
+}
+
 export function createInMemoryGenerationQueue(): GenerationQueue & { jobs: GenerationJobPayload[] } {
   const jobs: GenerationJobPayload[] = [];
   return {

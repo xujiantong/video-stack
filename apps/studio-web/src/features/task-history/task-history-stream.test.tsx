@@ -49,6 +49,24 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
+function generatedAssetResponse() {
+  return jsonResponse([
+    {
+      id: "00000000-0000-4000-8000-000000000301",
+      projectId,
+      userId: "00000000-0000-4000-8000-000000000501",
+      kind: "video",
+      mimeType: "video/mp4",
+      name: "即梦生成-demo.mp4",
+      sizeBytes: 1024,
+      durationMs: null,
+      status: "ready",
+      storageKey: "results/demo.mp4",
+      createdAt: "2026-04-28T08:00:02.000Z"
+    }
+  ]);
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -67,6 +85,7 @@ describe("TaskHistoryStream", () => {
     let detailReads = 0;
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/assets?")) return generatedAssetResponse();
       if (url.includes("/api/generation/tasks?")) return jsonResponse([detailReads > 0 ? completedTask : baseTask]);
       detailReads += 1;
       return jsonResponse(detailReads > 1 ? completedTask : baseTask);
@@ -87,10 +106,42 @@ describe("TaskHistoryStream", () => {
       updatedAt: "2026-04-28T08:00:02.000Z",
       finishedAt: "2026-04-28T08:00:02.000Z"
     };
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([failedTask])));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/api/assets?")) return generatedAssetResponse();
+        return jsonResponse([failedTask]);
+      })
+    );
 
     renderStream();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("生成失败，请稍后重试或查看详情。");
+  });
+
+  it("renders the generated video as the finished task preview", async () => {
+    const completedTask: GenerationTask = {
+      ...baseTask,
+      status: "succeeded",
+      actualCostCents: 0,
+      estimatedCostCents: 0,
+      resultAssetId: "00000000-0000-4000-8000-000000000301",
+      updatedAt: "2026-04-28T08:00:02.000Z",
+      finishedAt: "2026-04-28T08:00:02.000Z"
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/api/assets?")) return generatedAssetResponse();
+        return jsonResponse([completedTask]);
+      })
+    );
+
+    renderStream();
+
+    const preview = await screen.findByLabelText("生成结果预览");
+    expect(preview).toHaveAttribute("src", "/api/assets/00000000-0000-4000-8000-000000000301/content#t=0.1");
   });
 });

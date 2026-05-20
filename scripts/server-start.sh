@@ -20,6 +20,10 @@ pnpm install --frozen-lockfile
 echo "==> 数据库迁移"
 pnpm --filter studio-api db:migrate
 
+echo "==> 停止旧版手动启动进程"
+pkill -f "/opt/video-stack/apps/studio-api.*src/server.ts" 2>/dev/null || true
+pkill -f "/opt/video-stack/apps/studio-web.*vite.*preview" 2>/dev/null || true
+
 echo "==> 启动/重启 PM2 服务"
 if ! command -v pm2 >/dev/null 2>&1; then
   pnpm dlx pm2@latest startOrReload ecosystem.config.cjs --update-env
@@ -31,7 +35,7 @@ fi
 
 echo "==> 服务状态"
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 status video-stack-api video-stack-worker
+  pm2 status video-stack-api video-stack-worker video-stack-web
 else
-  pnpm dlx pm2@latest status video-stack-api video-stack-worker
+  pnpm dlx pm2@latest status video-stack-api video-stack-worker video-stack-web
 fi

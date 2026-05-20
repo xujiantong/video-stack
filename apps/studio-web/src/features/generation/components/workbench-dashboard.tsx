@@ -97,15 +97,22 @@ function TaskMeta({ onDetailsClick, task }: { onDetailsClick(): void; task: Gene
 
 function ProgressBar({ task }: { task: GenerationTask }) {
   if (task.status !== "queued" && task.status !== "running") return null;
-  const progress = task.status === "running" ? 36 : 12;
+  const isQueued = task.status === "queued";
   return (
     <div className="mt-4 grid gap-2">
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <span className="block h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+      <div className={cn("h-1.5 overflow-hidden rounded-full bg-muted", isQueued ? "opacity-70" : "studio-active-progress")}>
+        {isQueued ? <span className="block h-full w-1/3 rounded-full bg-warning/70" /> : null}
       </div>
-      <p className="text-right text-sm text-muted-foreground">预计剩余 01:32</p>
+      <p className="text-right text-sm text-muted-foreground">{isQueued ? "排队等待中" : "正在生成"}</p>
     </div>
   );
+}
+
+function taskStatusLabel(status: GenerationTask["status"]): string {
+  if (status === "queued") return "排队等待";
+  if (status === "running") return "正在生成";
+  if (status === "failed") return "生成失败";
+  return statusLabel[status];
 }
 
 function DetailsPopover({ task }: { task: GenerationTask }) {
@@ -397,7 +404,7 @@ function HistoryTaskCard({
         <div className="rounded-card bg-surface px-4 py-3 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <PromptWithRefs compact task={task} />
-            <Badge className="shrink-0" tone={statusTone[task.status]}>{statusLabel[task.status]}{task.status === "running" ? " 36%" : ""}</Badge>
+            <Badge className="shrink-0" tone={statusTone[task.status]}>{taskStatusLabel(task.status)}</Badge>
           </div>
           <div className="relative mt-2 inline-flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
             <TaskMeta

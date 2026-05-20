@@ -113,3 +113,29 @@
 @utility studio-preview-bg {
   background: linear-gradient(135deg, var(--preview-from), var(--preview-to));
 }
+
+@utility studio-active-progress {
+  position: relative;
+}
+
+@utility studio-active-progress {
+  &::before {
+    animation: studio-progress-glow 1.35s ease-in-out infinite;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    border-radius: 999px;
+    content: "";
+    inset: 0;
+    position: absolute;
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes studio-progress-glow {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}

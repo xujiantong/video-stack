@@ -10,7 +10,11 @@ type PromptInlineNode =
   | { type: "text"; text: string }
   | { type: "asset"; assetId: string; label: string; kind: AssetMention["kind"] };
 
-export type MentionMenuAsset = AssetMention & {
+type PromptAsset = AssetMention & {
+  previewUrl?: string;
+};
+
+export type MentionMenuAsset = PromptAsset & {
   disabledReason?: string;
 };
 
@@ -67,7 +71,7 @@ export function PromptEditor({
   onPromptDocChange
 }: {
   prompt: string;
-  assets: AssetMention[];
+  assets: PromptAsset[];
   mentionAssets?: MentionMenuAsset[];
   promptDoc: Record<string, unknown>;
   assetRefs: AssetMention[];
@@ -88,6 +92,7 @@ export function PromptEditor({
     const list = q.length === 0 ? candidates : candidates.filter((asset) => asset.label.toLowerCase().includes(q));
     return list.slice(0, 8);
   }, [assets, mentionAssets, mentionQuery]);
+  const assetsById = useMemo(() => new Map([...assets, ...(mentionAssets ?? [])].map((asset) => [asset.id, asset])), [assets, mentionAssets]);
   const activeOptionId = mentionOpen && filteredMenuAssets[activeIndex] ? `${menuId}-${filteredMenuAssets[activeIndex].id}` : undefined;
 
   function closeMentionMenu() {
@@ -168,6 +173,13 @@ export function PromptEditor({
         })}
       </div>
       <div className="relative">
+        {layout === "chat" && assetRefs.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {assetRefs.map((asset) => (
+              <AssetMentionChip asset={assetsById.get(asset.id) ?? asset} key={asset.id} />
+            ))}
+          </div>
+        ) : null}
         <Textarea
           ref={textareaRef}
           id="prompt-editor"
@@ -244,7 +256,7 @@ export function PromptEditor({
                       insertMention(asset);
                     }}
                   >
-                    <span className="text-muted-foreground">@</span>
+                    <AssetMentionThumb asset={asset} />
                     <span className="truncate">{asset.label}</span>
                     {asset.disabledReason ? <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{asset.disabledReason}</span> : null}
                   </button>
@@ -264,5 +276,26 @@ export function PromptEditor({
         ))}
       </div>
     </div>
+  );
+}
+
+function AssetMentionChip({ asset }: { asset: PromptAsset }) {
+  return (
+    <span className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-button border border-border bg-muted/45 px-1.5 pr-2 text-xs text-foreground">
+      <AssetMentionThumb asset={asset} />
+      <span className="truncate">@{asset.label}</span>
+    </span>
+  );
+}
+
+function AssetMentionThumb({ asset }: { asset: PromptAsset }) {
+  if (asset.kind === "image" && asset.previewUrl) {
+    return <img alt={`${asset.label}缩略图`} className="size-5 shrink-0 rounded-[4px] bg-background object-cover" src={asset.previewUrl} />;
+  }
+  const Icon = asset.kind === "audio" ? FileAudio2 : Image;
+  return (
+    <span className="grid size-5 shrink-0 place-items-center rounded-[4px] bg-background text-muted-foreground">
+      <Icon className="size-3" aria-hidden="true" />
+    </span>
   );
 }

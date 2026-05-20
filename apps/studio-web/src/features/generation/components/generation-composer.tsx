@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Calculator, Plus, SendHorizontal, ShieldAlert, Sparkles } from "lucide-react";
-import { expectedImageAssetCount, type AssetMention, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
+import { expectedImageAssetCount, isImageGenerationParameters, type AssetMention, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
 import { ModelParameterToolbar } from "./model-parameter-toolbar";
 import { buildPromptDoc, PromptEditor, type MentionMenuAsset } from "./prompt-editor";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,7 @@ export function GenerationComposer() {
     staleTime: 10_000
   });
   const expectedImages = expectedImageAssetCount(parameters);
+  const isImageGeneration = isImageGenerationParameters(parameters);
   const selectableAssets = expectedImages > 0 ? assets.filter((asset) => asset.kind === "image" && asset.status === "ready") : [];
   const mentionAssets = assets.map((asset): MentionMenuAsset => {
     let disabledReason: string | undefined;
@@ -56,11 +57,11 @@ export function GenerationComposer() {
     } else if (asset.status !== "ready") {
       disabledReason = asset.status === "uploading" ? "上传中" : "不可用";
     }
-    return { id: asset.id, kind: asset.kind, label: asset.label, ...(disabledReason ? { disabledReason } : {}) };
+    return { id: asset.id, kind: asset.kind, label: asset.label, ...(asset.previewUrl ? { previewUrl: asset.previewUrl } : {}), ...(disabledReason ? { disabledReason } : {}) };
   });
   const emptyAssetMessage =
     expectedImages === 0
-      ? "文生视频不使用参考资产。切到图生视频、参考图或首尾帧后，可以引用图片资产。"
+      ? "当前生成类型不使用参考资产。切到图生视频、参考图或首尾帧后，可以引用图片资产。"
       : "没有可引用的图片资产，请上传图片或等待上传完成。";
 
   useEffect(() => {
@@ -303,7 +304,7 @@ export function GenerationComposer() {
           <DialogCloseButton onClose={() => setConfirmEstimate(null)} />
         </DialogHeader>
         <div className="rounded-card border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-          系统会使用当前模型、分辨率和时长生成视频。
+          系统会使用当前模型{isImageGeneration ? "生成图片。" : "、分辨率和时长生成视频。"}
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => setConfirmEstimate(null)}>

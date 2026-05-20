@@ -8,6 +8,7 @@ import { projectId, toFileType, toSizeLabel, toSupportedUploadMimeType } from ".
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { TaskDetailDrawer } from "./task-detail-drawer";
 import { TaskTable } from "./task-table";
+import { Dialog, DialogCloseButton, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { assetsKey, completeAssetUpload, listAssets, presignAssetUpload, uploadAssetBytes } from "@/lib/api/assets-api";
 import { generationTasksKey, listGenerationTasks } from "@/lib/api/generation-api";
@@ -23,6 +24,7 @@ export function AssetsWorkspace() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>();
   const [deletedTaskIds, setDeletedTaskIds] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<StudioAsset | null>(null);
   const [retryFiles, setRetryFiles] = useState<Record<string, File>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const assets = useComposerStore((state) => state.assets);
@@ -124,7 +126,7 @@ export function AssetsWorkspace() {
 
   function viewAsset(asset: StudioAsset) {
     if (!asset.previewUrl) return;
-    window.open(asset.previewUrl, "_blank", "noopener,noreferrer");
+    setPreviewAsset(asset);
   }
 
   async function handleFiles(files: FileList | null) {
@@ -149,6 +151,7 @@ export function AssetsWorkspace() {
     if (!pendingDelete) return;
     if (pendingDelete.type === "asset") {
       removeAssetWithPreview(pendingDelete.id);
+      if (previewAsset?.id === pendingDelete.id) setPreviewAsset(null);
     } else {
       setDeletedTaskIds((ids) => [...ids, pendingDelete.id]);
       if (selectedTaskId === pendingDelete.id) setSelectedTaskId(undefined);
@@ -212,8 +215,30 @@ export function AssetsWorkspace() {
         )}
       </Tabs>
       <TaskDetailDrawer assets={assets} onClose={() => setSelectedTaskId(undefined)} task={selectedTask} />
+      <AssetPreviewDialog asset={previewAsset} onOpenChange={(open) => !open && setPreviewAsset(null)} />
       <DeleteConfirmDialog pendingDelete={pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)} onConfirm={confirmDelete} />
     </div>
+  );
+}
+
+function AssetPreviewDialog({ asset, onOpenChange }: { asset: StudioAsset | null; onOpenChange(open: boolean): void }) {
+  const previewUrl = asset?.previewUrl;
+  return (
+    <Dialog open={Boolean(asset && previewUrl)} panelClassName="max-w-4xl" title="资产预览" onOpenChange={onOpenChange}>
+      <DialogHeader>
+        <DialogTitle className="truncate">{asset?.label ?? "资产预览"}</DialogTitle>
+        <DialogCloseButton onClose={() => onOpenChange(false)} />
+      </DialogHeader>
+      <div className="grid max-h-[72vh] min-h-60 place-items-center overflow-hidden rounded-card border border-border bg-black">
+        {asset?.fileType === "image" && previewUrl ? (
+          <img alt={asset.label} className="max-h-[72vh] w-full object-contain" src={previewUrl} />
+        ) : asset?.fileType === "video" && previewUrl ? (
+          <video className="max-h-[72vh] w-full bg-black" controls src={previewUrl} />
+        ) : asset?.fileType === "audio" && previewUrl ? (
+          <audio className="w-full px-4" controls src={previewUrl} />
+        ) : null}
+      </div>
+    </Dialog>
   );
 }
 

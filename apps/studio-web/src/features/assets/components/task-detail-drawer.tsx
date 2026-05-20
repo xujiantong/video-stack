@@ -1,5 +1,5 @@
-import { Film, PanelRightClose, X } from "lucide-react";
-import type { GenerationTask } from "@video-stack/shared";
+import { Film, ImageIcon, PanelRightClose, X } from "lucide-react";
+import { DEFAULT_GENERATION_PARAMETERS, isImageGenerationParameters, type GenerationTask } from "@video-stack/shared";
 import { AssetIcon } from "@/components/domain/asset-icon";
 import { Badge } from "@/components/ui/badge";
 import { Drawer, DrawerBody, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -10,6 +10,7 @@ export function TaskDetailDrawer({ assets, onClose, task }: { assets: StudioAsse
   const referencedAssets = assets.filter((asset) => task?.assetRefs.some((ref) => ref.id === asset.id) ?? false);
   const costCents = (task?.actualCostCents ?? task?.estimatedCostCents) ?? 0;
   const resultUrl = task?.resultAssetId ? `/api/assets/${task.resultAssetId}/content` : null;
+  const isImageTask = task ? isImageGenerationParameters(task.parameters ?? DEFAULT_GENERATION_PARAMETERS) : false;
   const parameterBadges = [
     { key: "model", value: task?.parameters?.modelId ?? "Seedance 2.0" },
     { key: "mode", value: task?.parameters?.mode ?? "全能参考" },
@@ -29,10 +30,14 @@ export function TaskDetailDrawer({ assets, onClose, task }: { assets: StudioAsse
       </DrawerHeader>
       <div className="mt-4 aspect-video overflow-hidden rounded-card border border-border bg-background">
         {resultUrl ? (
-          <video className="h-full w-full bg-black object-contain" controls src={resultUrl} />
+          isImageTask ? (
+            <img className="h-full w-full bg-black object-contain" src={resultUrl} />
+          ) : (
+            <video className="h-full w-full bg-black object-contain" controls src={resultUrl} />
+          )
         ) : (
           <div className="grid h-full place-items-center text-muted-foreground">
-            <Film className="size-8" aria-hidden="true" />
+            {isImageTask ? <ImageIcon className="size-8" aria-hidden="true" /> : <Film className="size-8" aria-hidden="true" />}
           </div>
         )}
       </div>

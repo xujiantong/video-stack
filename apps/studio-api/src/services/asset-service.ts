@@ -22,12 +22,24 @@ type AssetServiceOptions = {
   idFactory?: () => string;
 };
 
+export type AssetContentRange = {
+  start: number;
+  end: number;
+};
+
+export type AssetContent = {
+  bytes: Buffer;
+  mimeType: string;
+  sizeBytes: number;
+  range?: AssetContentRange;
+};
+
 export type AssetService = {
   createUpload(input: CreateAssetUploadRequest): Promise<CreateAssetUploadResponse>;
   completeUpload(input: CompleteAssetUploadRequest): Promise<Asset>;
   listAssets(projectId: string): Promise<Asset[]>;
   acceptLocalUpload(storageKey: string, bytes: Buffer): Promise<void>;
-  readAssetContent(assetId: string): Promise<{ bytes: Buffer; mimeType: string }>;
+  readAssetContent(assetId: string, rangeHeader?: string): Promise<AssetContent>;
 };
 
 export function createAssetService({ repository, storage, userId, now = () => new Date(), idFactory = () => crypto.randomUUID() }: AssetServiceOptions): AssetService {
@@ -83,17 +95,39 @@ export function createAssetService({ repository, storage, userId, now = () => ne
       if (!storage.acceptLocalUpload) return;
       await storage.acceptLocalUpload(storageKey, bytes);
     },
-    async readAssetContent(assetId) {
+    async readAssetContent(assetId, rangeHeader) {
       const row = await repository.getAsset(assetId);
       if (row.status !== "ready") {
         throw apiError("ASSET_NOT_READY", "素材仍在上传或已失效，请等待上传完成后再查看。");
       }
-      if (!storage.readObject) {
+      if (!storage.readObject && !storage.readObjectRange) {
         throw apiError("VALIDATION_ERROR", "当前存储不支持读取素材内容。");
+      }
+      const range = parseRangeHeader(rangeHeader, row.sizeBytes);
+      if (range && storage.readObjectRange) {
+        return {
+          bytes: await storage.readObjectRange(row.tosKey, range.start, range.end),
+          mimeType: row.mimeType,
+          sizeBytes: row.sizeBytes,
+          range
+        };
+      }
+      if (range && storage.readObject) {
+        const bytes = await storage.readObject(row.tosKey);
+        return {
+          bytes: bytes.subarray(range.start, range.end + 1),
+          mimeType: row.mimeType,
+          sizeBytes: row.sizeBytes,
+          range
+        };
+      }
+      if (!storage.readObject) {
+        throw apiError("VALIDATION_ERROR", "当前存储不支持完整读取素材内容。");
       }
       return {
         bytes: await storage.readObject(row.tosKey),
-        mimeType: row.mimeType
+        mimeType: row.mimeType,
+        sizeBytes: row.sizeBytes
       };
     }
   };
@@ -123,6 +157,46 @@ function toPublicAsset(row: AssetRecord, now: () => Date): Asset {
     updatedAt: row.updatedAt.toISOString(),
     deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null
   };
+}
+
+function parseRangeHeader(rangeHeader: string | undefined, sizeBytes: number): AssetContentRange | undefined {
+  if (!rangeHeader) return undefined;
+  if (!rangeHeader.startsWith("bytes=")) return undefined;
+  const rangeSpec = rangeHeader.slice("bytes=".length).trim();
+  if (rangeSpec.includes(",")) throw rangeError(sizeBytes);
+  const match = /^(\d*)-(\d*)$/.exec(rangeSpec);
+  if (!match) throw rangeError(sizeBytes);
+
+  const [, startPart, endPart] = match;
+  if (!startPart && !endPart) throw rangeError(sizeBytes);
+  if (sizeBytes <= 0) throw rangeError(sizeBytes);
+
+  if (!startPart) {
+    const suffixLength = Number(endPart);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) throw rangeError(sizeBytes);
+    return {
+      start: Math.max(sizeBytes - suffixLength, 0),
+      end: sizeBytes - 1
+    };
+  }
+
+  const start = Number(startPart);
+  const requestedEnd = endPart ? Number(endPart) : sizeBytes - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || requestedEnd < start || start >= sizeBytes) {
+    throw rangeError(sizeBytes);
+  }
+
+  return {
+    start,
+    end: Math.min(requestedEnd, sizeBytes - 1)
+  };
+}
+
+function rangeError(sizeBytes: number): ApiError {
+  return apiError("VALIDATION_ERROR", "请求的视频范围无效。", {
+    httpStatus: 416,
+    contentRange: `bytes */${sizeBytes}`
+  });
 }
 
 function apiError(code: ErrorCode, message: string, details?: Record<string, unknown>): ApiError {

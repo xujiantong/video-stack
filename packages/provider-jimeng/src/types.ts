@@ -49,6 +49,7 @@ export type SubmitGenerationResult = {
 export type ProviderTaskStatus = {
   status: "running" | "succeeded" | "failed" | "canceled";
   resultUrl?: string;
+  resultMimeType?: string;
   errorCode?: ProviderErrorCode;
   errorMessage?: string;
   actualCostCents?: number;

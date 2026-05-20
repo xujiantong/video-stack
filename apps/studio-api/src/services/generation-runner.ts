@@ -7,7 +7,7 @@ import {
   type SubmitGenerationInput,
   type VideoProviderAdapter
 } from "@video-stack/provider-jimeng";
-import { isRetryableErrorCode, type ErrorCode, type GenerationJobPayload } from "@video-stack/shared";
+import { isImageGenerationParameters, isRetryableErrorCode, type ErrorCode, type GenerationJobPayload, type GenerationParameters } from "@video-stack/shared";
 import type { StudioRepository } from "../db/repositories";
 import { decryptSecret } from "../security/crypto";
 import type { StorageService } from "./storage-service";
@@ -67,19 +67,20 @@ export function createGenerationRunner({
       }
 
       const bytes = await adapter.downloadResult(submitted.providerTaskId, result.resultUrl);
-      const storageKey = `${task.projectId}/results/${task.id}.mp4`;
+      const resultMetadata = resultMetadataForTask(task.parameters, result.resultMimeType);
+      const storageKey = `${task.projectId}/results/${task.id}${resultMetadata.extension}`;
       const resultBytes = Buffer.from(bytes);
       if (storage.writeObject) {
-        await storage.writeObject(storageKey, resultBytes, "video/mp4");
+        await storage.writeObject(storageKey, resultBytes, resultMetadata.mimeType);
       } else {
         await storage.acceptLocalUpload?.(storageKey, resultBytes);
       }
       const resultAsset = await repository.createAsset({
         projectId: task.projectId,
         userId: task.userId,
-        kind: "video",
-        mimeType: "video/mp4",
-        name: `即梦生成-${task.id}.mp4`,
+        kind: resultMetadata.kind,
+        mimeType: resultMetadata.mimeType,
+        name: `即梦生成-${task.id}${resultMetadata.extension}`,
         sizeBytes: resultBytes.byteLength,
         tosBucket: storage.bucket,
         tosKey: storageKey,
@@ -90,6 +91,29 @@ export function createGenerationRunner({
       await markFailure(payload.taskId, error, repository);
     }
   };
+}
+
+function resultMetadataForTask(parameters: GenerationParameters | null | undefined, providerMimeType: string | undefined) {
+  const isImage = parameters ? isImageGenerationParameters(parameters) : providerMimeType?.startsWith("image/");
+  if (isImage) {
+    const mimeType = providerMimeType?.startsWith("image/") ? providerMimeType : "image/jpeg";
+    return {
+      extension: extensionForMimeType(mimeType),
+      kind: "image" as const,
+      mimeType
+    };
+  }
+  return {
+    extension: ".mp4",
+    kind: "video" as const,
+    mimeType: "video/mp4"
+  };
+}
+
+function extensionForMimeType(mimeType: string): string {
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/webp") return ".webp";
+  return ".jpg";
 }
 
 async function loadInputAssets(repository: StudioRepository, storage: StorageService, assetIds: string[]): Promise<ProviderInputAsset[]> {

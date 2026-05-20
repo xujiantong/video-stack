@@ -161,6 +161,7 @@ describe("GenerationComposer", () => {
     fireEvent.click(await screen.findByRole("button", { name: "引用第一个资产" }));
 
     expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Prompt" }).value).toContain("@包装主图");
+    expect(await screen.findByAltText("包装主图缩略图")).toHaveAttribute("src", sampleAssets[0]!.previewUrl);
   });
 
   it("keeps repeated asset mentions unique in the payload references", () => {
@@ -187,14 +188,15 @@ describe("GenerationComposer", () => {
     await waitFor(() => expect(screen.getByText("预计消耗")).toBeInTheDocument());
   });
 
-  it("shows all enabled Jimeng video 3.0 models", async () => {
+  it("shows all enabled Jimeng 3.0 models", async () => {
     renderComposer();
 
     const modelSelect = await screen.findByLabelText("模型");
 
-    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 720P");
-    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 1080P");
-    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 Pro 1080P");
+    expect(modelSelect).toHaveTextContent("即梦AI-图片生成3.0（免费试用）");
+    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 720P（额度用尽）");
+    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 1080P（免费试用）");
+    expect(modelSelect).toHaveTextContent("即梦AI-视频生成3.0 Pro 1080P（免费试用）");
     expect(screen.getByLabelText<HTMLSelectElement>("参考模式").value).toBe("none");
     expect(screen.getByLabelText<HTMLSelectElement>("比例").value).toBe("16:9");
     expect(screen.getByLabelText<HTMLSelectElement>("时长").value).toBe("5");
@@ -203,7 +205,7 @@ describe("GenerationComposer", () => {
   it("does not offer asset references for text-to-video", async () => {
     renderComposer();
 
-    expect(await screen.findByText("文生视频不使用参考资产。切到图生视频、参考图或首尾帧后，可以引用图片资产。")).toBeInTheDocument();
+    expect(await screen.findByText("当前生成类型不使用参考资产。切到图生视频、参考图或首尾帧后，可以引用图片资产。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "引用第一个资产" })).toBeDisabled();
   });
 

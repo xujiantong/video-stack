@@ -30,7 +30,7 @@ export const GENERATION_STATUSES = [
   "canceled"
 ] as const;
 
-export const GENERATION_MODES = ["text_to_video", "image_to_video", "first_last_frame", "reference_to_video"] as const;
+export const GENERATION_MODES = ["text_to_video", "image_to_video", "first_last_frame", "reference_to_video", "text_to_image"] as const;
 export const REFERENCE_MODES = ["none", "image", "audio", "image_audio", "first_last_frame"] as const;
 export const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 export const VIDEO_RESOLUTIONS = ["720p", "1080p"] as const;

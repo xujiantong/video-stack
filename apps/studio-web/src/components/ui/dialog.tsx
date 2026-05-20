@@ -5,12 +5,13 @@ import { cn } from "@/lib/utils";
 
 type DialogProps = {
   children: ReactNode;
+  panelClassName?: string;
   open: boolean;
   title: string;
   onOpenChange(open: boolean): void;
 };
 
-export function Dialog({ children, open, title, onOpenChange }: DialogProps) {
+export function Dialog({ children, open, panelClassName, title, onOpenChange }: DialogProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export function Dialog({ children, open, title, onOpenChange }: DialogProps) {
       <section
         aria-label={title}
         aria-modal="true"
-        className="w-full max-w-lg rounded-popover border border-border bg-surface p-4 shadow-popover"
+        className={cn("w-full max-w-lg rounded-popover border border-border bg-surface p-4 shadow-popover", panelClassName)}
         ref={dialogRef}
         role="dialog"
         tabIndex={-1}

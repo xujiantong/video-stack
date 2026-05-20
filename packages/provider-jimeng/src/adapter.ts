@@ -44,6 +44,7 @@ type SubmitTaskData = {
 type GetResultData = {
   status?: string;
   video_url?: string;
+  image_urls?: string[];
   fail_reason?: string;
 };
 
@@ -139,14 +140,7 @@ export function createJimengAdapter(options: CreateJimengAdapterOptions = {}): V
       const reqKey = resolveReqKey(input.parameters, options.reqKey);
       const response = await callJimeng<SubmitTaskData>({
         action: "CVSync2AsyncSubmitTask",
-        body: {
-          req_key: reqKey,
-          prompt: input.promptText,
-          seed: -1,
-          frames: toFrameCount(input.parameters?.durationSeconds),
-          aspect_ratio: input.parameters?.aspectRatio ?? "16:9",
-          ...buildImageInputBody(input)
-        },
+        body: buildSubmitBody(input, reqKey),
         credential,
         endpoint,
         fetchImpl,
@@ -179,10 +173,10 @@ export function createJimengAdapter(options: CreateJimengAdapterOptions = {}): V
       });
       const status = response.data?.status;
       if (status === "done") {
-        const resultUrl = response.data?.video_url;
+        const resultUrl = response.data?.video_url ?? response.data?.image_urls?.[0];
         return resultUrl
-          ? { status: "succeeded", resultUrl, actualCostCents: 0 }
-          : { status: "failed", errorCode: "PROVIDER_FAILED", errorMessage: "即梦没有返回视频地址。" };
+          ? { status: "succeeded", resultUrl, resultMimeType: resultMimeTypeForReqKey(decoded.reqKey), actualCostCents: 0 }
+          : { status: "failed", errorCode: "PROVIDER_FAILED", errorMessage: "即梦没有返回结果地址。" };
       }
       if (status === "in_queue" || status === "generating" || status === "running") {
         return { status: "running" };
@@ -297,6 +291,7 @@ function resolveReqKey(parameters: JimengGenerationParameters | null | undefined
   const mode = parameters?.mode ?? "text_to_video";
   const configuredReqKey = explicitReqKey ?? process.env.JIMENG_REQ_KEY;
   const resolutionSuffix = parameters?.resolution === "1080p" || parameters?.modelId?.includes("1080") ? "_1080" : "";
+  if (mode === "text_to_image" || parameters?.modelId === "jimeng-image-v3") return "jimeng_t2i_v30";
   if (mode === "first_last_frame" || parameters?.referenceMode === "first_last_frame") return `jimeng_i2v_first_tail_v30${resolutionSuffix}`;
   if (mode === "image_to_video") return `jimeng_i2v_first_v30${resolutionSuffix}`;
   if (mode === "reference_to_video") return `jimeng_i2v_recamera_v30${resolutionSuffix}`;
@@ -307,6 +302,56 @@ function resolveReqKey(parameters: JimengGenerationParameters | null | undefined
   return DEFAULT_REQ_KEY;
 }
 
+function buildSubmitBody(input: SubmitGenerationInput, reqKey: string): Record<string, unknown> {
+  if (isImageGeneration(input.parameters)) {
+    const { width, height } = dimensionsForAspectRatio(input.parameters?.aspectRatio);
+    return {
+      req_key: reqKey,
+      prompt: input.promptText,
+      seed: -1,
+      width,
+      height,
+      return_url: true,
+      logo_info: {
+        add_logo: false
+      }
+    };
+  }
+
+  return {
+    req_key: reqKey,
+    prompt: input.promptText,
+    seed: -1,
+    frames: toFrameCount(input.parameters?.durationSeconds),
+    aspect_ratio: input.parameters?.aspectRatio ?? "16:9",
+    ...buildImageInputBody(input)
+  };
+}
+
+function isImageGeneration(parameters: JimengGenerationParameters | null | undefined): boolean {
+  return parameters?.mode === "text_to_image" || parameters?.modelId === "jimeng-image-v3";
+}
+
+function dimensionsForAspectRatio(aspectRatio: string | undefined): { width: number; height: number } {
+  switch (aspectRatio) {
+    case "16:9":
+      return { width: 1344, height: 768 };
+    case "9:16":
+      return { width: 768, height: 1344 };
+    case "4:3":
+      return { width: 1152, height: 864 };
+    case "3:4":
+      return { width: 864, height: 1152 };
+    case "1:1":
+    default:
+      return { width: 1024, height: 1024 };
+  }
+}
+
+function resultMimeTypeForReqKey(reqKey: string): string {
+  return reqKey.includes("_t2i_") || reqKey.includes("_i2i_") ? "image/jpeg" : "video/mp4";
+}
+
 function collectInputAssets(input: EstimateInput): ProviderInputAsset[] {
   const structuredAssets = input.assets ?? [];
   if (structuredAssets.length > 0) return structuredAssets;
@@ -315,7 +360,7 @@ function collectInputAssets(input: EstimateInput): ProviderInputAsset[] {
 
 function buildImageInputBody(input: SubmitGenerationInput): Record<string, unknown> {
   const mode = input.parameters?.mode ?? "text_to_video";
-  if (mode === "text_to_video") return {};
+  if (mode === "text_to_video" || mode === "text_to_image") return {};
 
   const assets = collectInputAssets(input).filter((asset) => asset.kind === undefined || asset.kind === "image");
   const requiredCount = mode === "first_last_frame" || input.parameters?.referenceMode === "first_last_frame" ? 2 : 1;

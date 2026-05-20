@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleDashed, Clock3, PenLine, Play, RefreshCcw, Trash2, XCircle } from "lucide-react";
-import type { Asset, GenerationTask } from "@video-stack/shared";
+import { CheckCircle2, CircleDashed, Clock3, ImageIcon, PenLine, Play, RefreshCcw, Trash2, XCircle } from "lucide-react";
+import { DEFAULT_GENERATION_PARAMETERS, isImageGenerationParameters, type Asset, type GenerationTask } from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,10 @@ function isActiveTask(status: GenerationTask["status"]): boolean {
 
 function hasActiveTasks(tasks: GenerationTask[] | undefined): boolean {
   return tasks?.some((task) => isActiveTask(task.status)) ?? false;
+}
+
+function isImageTask(task: GenerationTask): boolean {
+  return isImageGenerationParameters(task.parameters ?? DEFAULT_GENERATION_PARAMETERS);
 }
 
 function TaskHistoryCard({
@@ -87,7 +91,12 @@ function TaskHistoryCard({
   const parameters = currentTask.parameters;
   const failureMessage =
     currentTask.status === "failed" ? (currentTask.errorMessage ? `${currentTask.errorMessage} 请调整参数后重试。` : "生成失败，请稍后重试或查看详情。") : null;
-  const resultPreviewUrl = currentTask.resultAssetId ? `/api/assets/${currentTask.resultAssetId}/content#t=0.1` : null;
+  const imageTask = isImageTask(currentTask);
+  const resultPreviewUrl = currentTask.resultAssetId
+    ? imageTask
+      ? `/api/assets/${currentTask.resultAssetId}/content`
+      : `/api/assets/${currentTask.resultAssetId}/content#t=0.1`
+    : null;
   const canPlayPreview = currentTask.status === "succeeded" && Boolean(resultPreviewUrl);
 
   async function handlePreviewClick() {
@@ -95,6 +104,7 @@ function TaskHistoryCard({
       onFocus?.(currentTask);
       return;
     }
+    if (imageTask) return;
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
@@ -144,23 +154,32 @@ function TaskHistoryCard({
       >
         <div className={cn("studio-preview-bg relative grid overflow-hidden place-items-center", compact ? "h-28" : "aspect-video")}>
           {currentTask.status === "succeeded" && resultPreviewUrl ? (
-            <>
-              <video
-                ref={videoRef}
-                aria-label="生成结果预览"
-                className="absolute inset-0 h-full w-full bg-black object-cover"
-                muted
-                onEnded={() => setIsPlaying(false)}
-                onPause={() => setIsPlaying(false)}
-                onPlay={() => setIsPlaying(true)}
-                playsInline
-                preload="metadata"
-                src={resultPreviewUrl}
-              />
-              <span className={cn("relative z-10 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-primary-ring", isPlaying && "opacity-0")}>
-                <Play className="size-5 fill-current" aria-hidden="true" />
-              </span>
-            </>
+            imageTask ? (
+              <>
+                <img aria-label="生成图片预览" className="absolute inset-0 h-full w-full object-cover" src={resultPreviewUrl} />
+                <span className="relative z-10 grid size-12 place-items-center rounded-full bg-background/70 text-foreground shadow-primary-ring backdrop-blur">
+                  <ImageIcon className="size-5" aria-hidden="true" />
+                </span>
+              </>
+            ) : (
+              <>
+                <video
+                  ref={videoRef}
+                  aria-label="生成结果预览"
+                  className="absolute inset-0 h-full w-full bg-black object-cover"
+                  muted
+                  onEnded={() => setIsPlaying(false)}
+                  onPause={() => setIsPlaying(false)}
+                  onPlay={() => setIsPlaying(true)}
+                  playsInline
+                  preload="metadata"
+                  src={resultPreviewUrl}
+                />
+                <span className={cn("relative z-10 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-primary-ring", isPlaying && "opacity-0")}>
+                  <Play className="size-5 fill-current" aria-hidden="true" />
+                </span>
+              </>
+            )
           ) : currentTask.status === "succeeded" ? (
             <span className="relative z-10 grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
               <Play className="size-5 fill-current" aria-hidden="true" />

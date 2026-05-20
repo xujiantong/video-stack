@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { isImageGenerationParameters } from "@video-stack/shared";
 import type {
   AspectRatio,
   GenerationMode,
@@ -17,7 +18,8 @@ const modeLabels: Record<GenerationMode, string> = {
   text_to_video: "文生视频",
   image_to_video: "图生视频",
   first_last_frame: "首尾帧",
-  reference_to_video: "参考生成"
+  reference_to_video: "参考生成",
+  text_to_image: "文生图"
 };
 
 const referenceModeLabels: Record<ReferenceMode, string> = {
@@ -34,6 +36,11 @@ const fieldLabels: Record<ParameterKey, string> = {
   aspectRatio: "比例",
   resolution: "分辨率",
   durationSeconds: "时长"
+};
+
+const quotaStatusLabels: Partial<Record<ModelCapability["quotaStatus"], string>> = {
+  free_trial: "免费试用",
+  exhausted: "额度用尽"
 };
 
 function firstValue<T>(values: readonly T[], field: string): T {
@@ -78,6 +85,11 @@ function labelFor(field: ParameterKey, value: GenerationParameters[ParameterKey]
   return String(value).toUpperCase();
 }
 
+function labelForModel(model: ModelCapability): string {
+  const quotaLabel = quotaStatusLabels[model.quotaStatus];
+  return quotaLabel ? `${model.displayName}（${quotaLabel}）` : model.displayName;
+}
+
 export function ModelParameterToolbar({
   models,
   parameters,
@@ -89,6 +101,7 @@ export function ModelParameterToolbar({
 }) {
   const [notice, setNotice] = useState("");
   const selectedModel = models.find((model) => model.id === parameters.modelId) ?? firstValue(models, "模型");
+  const isImageModel = isImageGenerationParameters(parameters);
 
   const options = useMemo(
     () => ({
@@ -169,7 +182,7 @@ export function ModelParameterToolbar({
           >
             {models.map((model) => (
               <option key={model.id} value={model.id}>
-                {model.displayName}
+                {labelForModel(model)}
               </option>
             ))}
           </select>
@@ -177,8 +190,8 @@ export function ModelParameterToolbar({
         </label>
         {renderSelect("referenceMode", options.referenceMode)}
         {renderSelect("aspectRatio", options.aspectRatio)}
-        {renderSelect("resolution", options.resolution)}
-        {renderSelect("durationSeconds", options.durationSeconds)}
+        {isImageModel ? null : renderSelect("resolution", options.resolution)}
+        {isImageModel ? null : renderSelect("durationSeconds", options.durationSeconds)}
       </div>
       <p className={cn("min-h-3 text-[11px] text-warning", notice.length === 0 && "sr-only")} role="status">
         {notice || "参数未调整。"}
@@ -189,12 +202,15 @@ export function ModelParameterToolbar({
 
 function normalizeModePair(parameters: GenerationParameters, changedField: ParameterKey): GenerationParameters {
   if (changedField === "mode") {
+    if (parameters.mode === "text_to_image") return { ...parameters, referenceMode: "none" };
     if (parameters.mode === "text_to_video") return { ...parameters, referenceMode: "none" };
     if (parameters.mode === "first_last_frame") return { ...parameters, referenceMode: "first_last_frame" };
     return { ...parameters, referenceMode: "image" };
   }
   if (changedField === "referenceMode") {
-    if (parameters.referenceMode === "none") return { ...parameters, mode: "text_to_video" };
+    if (parameters.referenceMode === "none") {
+      return parameters.modelId.startsWith("jimeng-image-") ? { ...parameters, mode: "text_to_image" } : { ...parameters, mode: "text_to_video" };
+    }
     if (parameters.referenceMode === "first_last_frame") return { ...parameters, mode: "first_last_frame" };
     if (parameters.mode === "text_to_video") return { ...parameters, mode: "image_to_video" };
   }

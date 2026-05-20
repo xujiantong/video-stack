@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AssetsWorkspace } from "./assets-workspace";
 import { useComposerStore } from "@/lib/stores/composer-store";
@@ -76,5 +76,8 @@ describe("AssetsWorkspace", () => {
     expect(row).not.toBeNull();
     expect(within(row!).getByText("video")).toBeInTheDocument();
     expect(within(row!).getByRole("button", { name: "查看资产" })).toBeEnabled();
+
+    fireEvent.click(nameCell);
+    expect(await screen.findByRole("dialog", { name: "资产预览" })).toBeInTheDocument();
   });
 });

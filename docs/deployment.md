@@ -60,6 +60,68 @@ pnpm start:web
 
 Web 默认使用 `4173` 端口预览构建结果。API 默认监听 `4000`。Worker 使用 `REDIS_URL` 连接同一个队列。
 
+## 本地构建后发布到服务器
+
+适合服务器 `pnpm build` 慢或内存不足的场景。这个流程只在本地构建 Web，服务器负责安装依赖、跑迁移、启动 API 和 Worker。
+
+服务器先创建目录和 `.env`：
+
+```bash
+sudo mkdir -p /opt/video-stack
+sudo chown -R "$USER":"$USER" /opt/video-stack
+cd /opt/video-stack
+cp .env.example .env
+```
+
+编辑 `/opt/video-stack/.env`，填生产数据库、Redis、S3 和 `STUDIO_SECRET_KEY_BASE64`。
+
+本地执行：
+
+```bash
+DEPLOY_TARGET=user@server-ip DEPLOY_PATH=/opt/video-stack bash scripts/deploy-local-build.sh
+```
+
+如 SSH 不是 22 端口：
+
+```bash
+DEPLOY_TARGET=user@server-ip SSH_PORT=2222 DEPLOY_PATH=/opt/video-stack bash scripts/deploy-local-build.sh
+```
+
+脚本会执行：
+
+```text
+本地 pnpm --filter studio-web build
+rsync 上传代码和 apps/studio-web/dist
+服务器 pnpm install --frozen-lockfile
+服务器 pnpm --filter studio-api db:migrate
+PM2 启动 video-stack-api 和 video-stack-worker
+```
+
+Nginx 示例：
+
+```nginx
+server {
+  listen 80;
+  server_name example.com;
+
+  root /opt/video-stack/apps/studio-web/dist;
+  index index.html;
+
+  location /api/ {
+    proxy_pass http://127.0.0.1:4000/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+```
+
 ## API 密钥
 
 不要把即梦 Secret Key 写入前端配置。用户在 Web 的 API 设置页保存 API Key 和 Secret Key。API 使用 `STUDIO_SECRET_KEY_BASE64` 加密 Secret Key，并只返回脱敏标签。

@@ -320,7 +320,7 @@ async function validateModelAndAssets(
 }
 
 function assetRequirementMessage(expectedImages: number): string {
-  if (expectedImages === 0) return "文生视频不需要参考素材，请移除已引用素材。";
+  if (expectedImages === 0) return "当前生成类型不需要参考素材，请移除已引用素材。";
   if (expectedImages === 1) return "当前生成类型需要引用 1 张已上传图片。";
   return "首尾帧生成需要按顺序引用 2 张已上传图片。";
 }

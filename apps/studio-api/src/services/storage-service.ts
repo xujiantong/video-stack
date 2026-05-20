@@ -12,6 +12,7 @@ export type StorageService = {
   acceptLocalUpload?(storageKey: string, bytes: Buffer): Promise<void>;
   writeObject?(storageKey: string, bytes: Buffer, mimeType: string): Promise<void>;
   readObject?(storageKey: string): Promise<Buffer>;
+  readObjectRange?(storageKey: string, start: number, end: number): Promise<Buffer>;
 };
 
 export function createStorageService(env: StudioEnv = readEnv()): StorageService {
@@ -45,6 +46,11 @@ function createLocalStorageService(env: StudioEnv): StorageService {
       const bytes = objects.get(storageKey);
       if (!bytes) throw new Error(`对象不存在：${storageKey}`);
       return bytes;
+    },
+    async readObjectRange(storageKey, start, end) {
+      const bytes = objects.get(storageKey);
+      if (!bytes) throw new Error(`对象不存在：${storageKey}`);
+      return bytes.subarray(start, end + 1);
     }
   };
 }
@@ -125,11 +131,28 @@ function createS3StorageService(env: StudioEnv): StorageService {
       const client = await createClient();
       const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: storageKey }));
       if (!result.Body) throw new Error(`对象不存在：${storageKey}`);
-      const chunks: Uint8Array[] = [];
-      for await (const chunk of result.Body as AsyncIterable<Uint8Array>) {
-        chunks.push(chunk);
-      }
-      return Buffer.concat(chunks);
+      return collectBody(result.Body as AsyncIterable<Uint8Array>);
+    },
+    async readObjectRange(storageKey, start, end) {
+      const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+      const client = await createClient();
+      const result = await client.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+          Range: `bytes=${start}-${end}`
+        })
+      );
+      if (!result.Body) throw new Error(`对象不存在：${storageKey}`);
+      return collectBody(result.Body as AsyncIterable<Uint8Array>);
     }
   };
+}
+
+async function collectBody(body: AsyncIterable<Uint8Array>): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of body) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }

@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Download, Info, MoreHorizontal, PenLine, Play, RefreshCcw, ShieldAlert, Trash2, Waves, X } from "lucide-react";
-import { DEFAULT_GENERATION_PARAMETERS, DEFAULT_MODEL_CAPABILITIES, type AssetMention, type EstimateGenerationResponse, type GenerationTask } from "@video-stack/shared";
+import { Bookmark, Download, ImageIcon, Info, MoreHorizontal, PenLine, Play, RefreshCcw, ShieldAlert, Trash2, Waves, X } from "lucide-react";
+import {
+  DEFAULT_GENERATION_PARAMETERS,
+  DEFAULT_MODEL_CAPABILITIES,
+  isImageGenerationParameters,
+  type AssetMention,
+  type EstimateGenerationResponse,
+  type GenerationTask
+} from "@video-stack/shared";
 import { statusLabel } from "@/components/domain/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +47,14 @@ function assetLabel(asset: AssetMention): string {
   return "图片";
 }
 
+function parametersForTask(task: GenerationTask) {
+  return task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+}
+
+function isImageTask(task: GenerationTask): boolean {
+  return isImageGenerationParameters(parametersForTask(task));
+}
+
 function PromptWithRefs({ compact = false, task }: { compact?: boolean; task: GenerationTask }) {
   return (
     <div className={cn("min-w-0 font-medium leading-6 text-foreground", compact ? "text-sm" : "text-lg")}>
@@ -60,12 +75,17 @@ function modelLabel(modelId: string): string {
 }
 
 function TaskMeta({ onDetailsClick, task }: { onDetailsClick(): void; task: GenerationTask }) {
-  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  const parameters = parametersForTask(task);
+  const imageTask = isImageTask(task);
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
       <span>{modelLabel(parameters.modelId)}</span>
-      <span className="text-border">|</span>
-      <span>{parameters.durationSeconds}s</span>
+      {imageTask ? null : (
+        <>
+          <span className="text-border">|</span>
+          <span>{parameters.durationSeconds}s</span>
+        </>
+      )}
       <span className="text-border">|</span>
       <button className="inline-flex items-center gap-1.5 hover:text-foreground" onClick={onDetailsClick} type="button">
         详细信息
@@ -89,16 +109,21 @@ function ProgressBar({ task }: { task: GenerationTask }) {
 }
 
 function DetailsPopover({ task }: { task: GenerationTask }) {
-  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  const parameters = parametersForTask(task);
+  const imageTask = isImageTask(task);
   return (
     <div className="absolute right-0 top-10 z-20 w-80 rounded-card border border-border bg-surface-raised p-5 text-sm shadow-popover">
       <dl className="grid grid-cols-[1fr_auto] gap-x-8 gap-y-4">
-        <dt className="text-muted-foreground">视频比例</dt>
+        <dt className="text-muted-foreground">{imageTask ? "图片比例" : "视频比例"}</dt>
         <dd>{parameters.aspectRatio}</dd>
-        <dt className="text-muted-foreground">帧率</dt>
-        <dd>24</dd>
-        <dt className="text-muted-foreground">分辨率</dt>
-        <dd>{parameters.resolution.toUpperCase()}</dd>
+        {imageTask ? null : (
+          <>
+            <dt className="text-muted-foreground">帧率</dt>
+            <dd>24</dd>
+            <dt className="text-muted-foreground">分辨率</dt>
+            <dd>{parameters.resolution.toUpperCase()}</dd>
+          </>
+        )}
         <dt className="text-muted-foreground">生成时间</dt>
         <dd>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(task.createdAt))}</dd>
         <dt className="text-muted-foreground">参考模式</dt>
@@ -109,7 +134,8 @@ function DetailsPopover({ task }: { task: GenerationTask }) {
 }
 
 function resultUrlForTask(task: GenerationTask): string | null {
-  return task.resultAssetId ? `/api/assets/${task.resultAssetId}/content#t=0.1` : null;
+  if (!task.resultAssetId) return null;
+  return isImageTask(task) ? `/api/assets/${task.resultAssetId}/content` : `/api/assets/${task.resultAssetId}/content#t=0.1`;
 }
 
 function ResultPreview({
@@ -128,6 +154,40 @@ function ResultPreview({
   const resultUrl = resultUrlForTask(task);
 
   if (task.status === "succeeded" && resultUrl) {
+    if (isImageTask(task)) {
+      return (
+        <div className="studio-preview-bg relative aspect-video max-h-[300px] cursor-zoom-in overflow-hidden bg-background">
+          <img aria-label="生成图片预览" className="absolute inset-0 h-full w-full object-cover" src={resultUrl} />
+          <span className="absolute left-3 top-3 rounded-button border border-white/20 bg-black/40 px-2 py-0.5 text-xs font-medium text-white/80 backdrop-blur">AI生成</span>
+          <button aria-label="放大查看生成图片" className="absolute inset-0 z-10" onClick={onOpenViewer} type="button" />
+          <div className="absolute right-3 top-3 z-20 flex items-center rounded-button bg-background/80 p-0.5 text-foreground shadow-popover backdrop-blur">
+            <Button aria-label="下载结果" className="size-5 px-0" onClick={(event) => event.stopPropagation()} type="button" variant="ghost">
+              <Download className="size-3" aria-hidden="true" />
+            </Button>
+            <div className="relative">
+              <Button
+                aria-expanded={menuOpen}
+                aria-label="更多操作"
+                className="size-5 px-0"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMenuToggle();
+                }}
+                type="button"
+                variant="ghost"
+              >
+                <MoreHorizontal className="size-3" aria-hidden="true" />
+              </Button>
+              {menuOpen ? <TaskMenu onDelete={onDelete} /> : null}
+            </div>
+            <Button aria-label="收藏" className="size-5 px-0" onClick={(event) => event.stopPropagation()} type="button" variant="ghost">
+              <Bookmark className="size-3" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="studio-preview-bg relative aspect-video max-h-[300px] cursor-zoom-in overflow-hidden bg-background">
         <video
@@ -200,17 +260,22 @@ function VideoViewer({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const resultUrl = resultUrlForTask(task);
-  const parameters = task.parameters ?? DEFAULT_GENERATION_PARAMETERS;
+  const parameters = parametersForTask(task);
+  const imageTask = isImageTask(task);
   if (!resultUrl) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid grid-cols-[minmax(0,1fr)_360px] bg-background text-foreground" role="dialog" aria-label="视频查看器" aria-modal="true">
+    <div className="fixed inset-0 z-50 grid grid-cols-[minmax(0,1fr)_360px] bg-background text-foreground" role="dialog" aria-label={imageTask ? "图片查看器" : "视频查看器"} aria-modal="true">
       <main className="grid min-h-0 place-items-center p-8">
         <Button aria-label="关闭查看器" className="absolute right-[384px] top-6 size-10 px-0" onClick={onClose} type="button" variant="secondary">
           <X className="size-5" aria-hidden="true" />
         </Button>
         <div className="relative w-full max-w-6xl overflow-hidden rounded-card bg-black shadow-popover">
-          <video aria-label="放大生成结果预览" autoPlay className="max-h-[78vh] w-full object-contain" controls muted playsInline src={resultUrl} />
+          {imageTask ? (
+            <img aria-label="放大生成图片预览" className="max-h-[78vh] w-full object-contain" src={resultUrl} />
+          ) : (
+            <video aria-label="放大生成结果预览" autoPlay className="max-h-[78vh] w-full object-contain" controls muted playsInline src={resultUrl} />
+          )}
           <span className="absolute left-4 top-4 rounded-button border border-white/20 bg-black/40 px-2 py-1 text-sm font-medium text-white/80 backdrop-blur">AI生成</span>
         </div>
       </main>
@@ -238,19 +303,27 @@ function VideoViewer({
           </div>
         </div>
         <div className="mt-6 border-t border-border pt-6">
-          <p className="text-sm text-muted-foreground">视频提示词</p>
+          <p className="text-sm text-muted-foreground">{imageTask ? "图片提示词" : "视频提示词"}</p>
           <p className="mt-3 text-sm leading-6">{task.promptText}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{modelLabel(parameters.modelId)}</span>
-            <span>|</span>
-            <span>{parameters.durationSeconds}s</span>
+            {imageTask ? null : (
+              <>
+                <span>|</span>
+                <span>{parameters.durationSeconds}s</span>
+              </>
+            )}
             <span>|</span>
             <span>{parameters.aspectRatio}</span>
           </div>
         </div>
         <dl className="mt-8 grid grid-cols-[1fr_auto] gap-y-4 text-sm">
-          <dt className="text-muted-foreground">分辨率</dt>
-          <dd>{parameters.resolution.toUpperCase()}</dd>
+          {imageTask ? null : (
+            <>
+              <dt className="text-muted-foreground">分辨率</dt>
+              <dd>{parameters.resolution.toUpperCase()}</dd>
+            </>
+          )}
           <dt className="text-muted-foreground">参考模式</dt>
           <dd>{referenceLabel(parameters.referenceMode)}</dd>
           <dt className="text-muted-foreground">生成时间</dt>

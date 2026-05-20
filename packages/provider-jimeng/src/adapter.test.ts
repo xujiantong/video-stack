@@ -75,6 +75,33 @@ describe("jimeng adapter", () => {
     expect(requests[1]).toContain("jimeng_t2v_v30_pro");
   });
 
+  it("submits Jimeng image 3.0 generation and reads image result URLs", async () => {
+    const requests: string[] = [];
+    const adapter = createJimengAdapter({
+      fetch: async (_url, init) => {
+        requests.push(String(init?.body));
+        if (requests.length === 1) {
+          return new Response(JSON.stringify({ code: 10000, data: { task_id: "image-task-1" }, message: "Success" }));
+        }
+        return new Response(JSON.stringify({ code: 10000, data: { status: "done", image_urls: ["https://example.com/result.jpg"] } }));
+      }
+    });
+
+    const submitted = await adapter.submit({
+      apiKey: "ak_demo",
+      secretKey: "sk_demo",
+      promptText: "一张有中文标题的产品海报",
+      assetUrls: [],
+      parameters: { aspectRatio: "1:1", durationSeconds: 5, mode: "text_to_image", modelId: "jimeng-image-v3", resolution: "1080p" }
+    });
+    const status = await adapter.getStatus(submitted.providerTaskId, { apiKey: "ak_demo", secretKey: "sk_demo" });
+
+    expect(status).toMatchObject({ status: "succeeded", resultUrl: "https://example.com/result.jpg", resultMimeType: "image/jpeg" });
+    expect(requests[0]).toContain("jimeng_t2i_v30");
+    expect(requests[0]).toContain('"return_url":true');
+    expect(requests[0]).not.toContain('"frames"');
+  });
+
   it("submits image-to-video assets as base64 image data", async () => {
     const requests: string[] = [];
     const adapter = createJimengAdapter({

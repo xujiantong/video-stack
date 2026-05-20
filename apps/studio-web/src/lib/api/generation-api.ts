@@ -3,6 +3,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
   HIGH_COST_THRESHOLD_CENTS,
   apiErrorSchema,
+  isImageGenerationParameters,
   type AssetMention,
   type CreateGenerationRequest,
   type EstimateGenerationResponse,
@@ -47,7 +48,7 @@ export async function estimateGeneration(input: {
   const fallbackRequiresSecondConfirm = fallbackCostCents >= HIGH_COST_THRESHOLD_CENTS || Boolean(input.sourceTaskId);
   const fallback = {
     estimatedCostCents: fallbackCostCents,
-    estimatedSeconds: parameters.durationSeconds * 6,
+    estimatedSeconds: isImageGenerationParameters(parameters) ? 60 : parameters.durationSeconds * 6,
     requiresSecondConfirm: fallbackRequiresSecondConfirm,
     secondConfirmToken: fallbackRequiresSecondConfirm ? crypto.randomUUID().replaceAll("-", "") : undefined
   };

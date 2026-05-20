@@ -40,7 +40,17 @@ export function AssetTable({
             <TableCell>
               <AssetIcon asset={asset} />
             </TableCell>
-            <TableCell className="font-medium">{asset.label}</TableCell>
+            <TableCell className="font-medium">
+              <button
+                className="max-w-[320px] truncate text-left hover:text-primary disabled:cursor-default disabled:text-foreground"
+                disabled={!asset.previewUrl}
+                onClick={() => onView(asset)}
+                title={asset.previewUrl ? "点击预览" : asset.label}
+                type="button"
+              >
+                {asset.label}
+              </button>
+            </TableCell>
             <TableCell className="text-muted-foreground">{asset.fileType}</TableCell>
             <TableCell className="text-muted-foreground">{asset.sizeLabel}</TableCell>
             <TableCell>

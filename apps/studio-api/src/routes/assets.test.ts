@@ -85,4 +85,95 @@ describe("asset routes", () => {
     expect(asset.status).toBe("ready");
     expect(asset.storageKey).toBe(presignBody.storageKey);
   });
+
+  it("serves asset content with HTTP range support", async () => {
+    const app = await buildAssetTestServer();
+    const presignResponse = await app.inject({
+      method: "POST",
+      url: "/api/assets/presign",
+      payload: {
+        projectId,
+        fileName: "demo.mp4",
+        mimeType: "video/mp4",
+        sizeBytes: 11,
+        durationMs: 1_000
+      }
+    });
+    const presignBody = presignResponse.json<{
+      assetId: string;
+      uploadUrl: string;
+      storageKey: string;
+    }>();
+    await app.inject({
+      method: "PUT",
+      url: presignBody.uploadUrl,
+      headers: { "content-type": "video/mp4" },
+      payload: Buffer.from("hello world")
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/assets/complete",
+      payload: {
+        assetId,
+        projectId,
+        storageKey: presignBody.storageKey
+      }
+    });
+
+    const rangeResponse = await app.inject({
+      method: "GET",
+      url: `/api/assets/${assetId}/content`,
+      headers: { range: "bytes=0-4" }
+    });
+
+    expect(rangeResponse.statusCode).toBe(206);
+    expect(rangeResponse.headers["accept-ranges"]).toBe("bytes");
+    expect(rangeResponse.headers["content-range"]).toBe("bytes 0-4/11");
+    expect(rangeResponse.headers["content-length"]).toBe("5");
+    expect(rangeResponse.body).toBe("hello");
+  });
+
+  it("rejects unsatisfiable asset content ranges", async () => {
+    const app = await buildAssetTestServer();
+    const presignResponse = await app.inject({
+      method: "POST",
+      url: "/api/assets/presign",
+      payload: {
+        projectId,
+        fileName: "demo.mp4",
+        mimeType: "video/mp4",
+        sizeBytes: 5,
+        durationMs: 1_000
+      }
+    });
+    const presignBody = presignResponse.json<{
+      assetId: string;
+      uploadUrl: string;
+      storageKey: string;
+    }>();
+    await app.inject({
+      method: "PUT",
+      url: presignBody.uploadUrl,
+      headers: { "content-type": "video/mp4" },
+      payload: Buffer.from("hello")
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/assets/complete",
+      payload: {
+        assetId,
+        projectId,
+        storageKey: presignBody.storageKey
+      }
+    });
+
+    const rangeResponse = await app.inject({
+      method: "GET",
+      url: `/api/assets/${assetId}/content`,
+      headers: { range: "bytes=9-10" }
+    });
+
+    expect(rangeResponse.statusCode).toBe(416);
+    expect(rangeResponse.headers["content-range"]).toBe("bytes */5");
+  });
 });

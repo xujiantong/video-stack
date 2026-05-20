@@ -20,13 +20,16 @@ const baseCapability = {
 } as const;
 
 describe("model schemas", () => {
-  it("enables the three Jimeng video 3.0 capabilities", () => {
+  it("enables Jimeng image and video 3.0 capabilities", () => {
     expect(DEFAULT_MODEL_CAPABILITIES.map((model) => model.id)).toEqual([
       "jimeng-video-v3-720p",
       "jimeng-video-v3-1080p",
-      "jimeng-video-v3-pro-1080p"
+      "jimeng-video-v3-pro-1080p",
+      "jimeng-image-v3"
     ]);
     expect(DEFAULT_MODEL_CAPABILITIES.every((model) => model.enabled)).toBe(true);
+    expect(DEFAULT_MODEL_CAPABILITIES.find((model) => model.id === "jimeng-video-v3-720p")?.quotaStatus).toBe("exhausted");
+    expect(DEFAULT_MODEL_CAPABILITIES.find((model) => model.id === "jimeng-image-v3")?.quotaStatus).toBe("free_trial");
   });
 
   it("validates model capability records without requiring unconfirmed official IDs", () => {
@@ -35,6 +38,7 @@ describe("model schemas", () => {
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("model capability parse failed");
     expect(result.data.maxPromptLength).toBe(4000);
+    expect(result.data.quotaStatus).toBe("available");
   });
 
   it("checks model compatibility against parameters and asset refs", () => {

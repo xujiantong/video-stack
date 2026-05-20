@@ -14,6 +14,7 @@ describe("model routes", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "jimeng-video-v3-720p",
+          quotaStatus: "exhausted",
           supportedModes: expect.arrayContaining(["text_to_video"]),
           supportedRatios: expect.arrayContaining(["16:9"]),
           supportedResolutions: expect.arrayContaining(["720p"]),
@@ -21,6 +22,7 @@ describe("model routes", () => {
         }),
         expect.objectContaining({
           id: "jimeng-video-v3-1080p",
+          quotaStatus: "free_trial",
           supportedResolutions: expect.arrayContaining(["1080p"])
         }),
         expect.objectContaining({

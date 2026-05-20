@@ -29,6 +29,8 @@ export const modelPricingSchema = z.object({
   currency: z.literal("CNY")
 });
 
+export const modelQuotaStatusSchema = z.enum(["available", "free_trial", "exhausted"]);
+
 export const modelCapabilitySchema = z.object({
   id: z.string().min(1).max(120),
   provider: providerSchema,
@@ -42,6 +44,7 @@ export const modelCapabilitySchema = z.object({
   maxPromptLength: z.number().int().positive().max(MAX_PROMPT_LENGTH).default(MAX_PROMPT_LENGTH),
   maxAssetRefs: z.number().int().nonnegative().max(MAX_ASSET_REFS).default(MAX_ASSET_REFS),
   pricing: modelPricingSchema,
+  quotaStatus: modelQuotaStatusSchema.default("available"),
   enabled: z.boolean().default(true)
 });
 
@@ -76,10 +79,15 @@ export function modelSupportsParameters(input: ModelCompatibilityInput): boolean
 }
 
 export function expectedImageAssetCount(parameters: GenerationParameters): number {
+  if (parameters.mode === "text_to_image") return 0;
   if (parameters.mode === "text_to_video" && parameters.referenceMode === "none") return 0;
   if (parameters.mode === "first_last_frame" || parameters.referenceMode === "first_last_frame") return 2;
   if (parameters.mode === "image_to_video" || parameters.mode === "reference_to_video" || parameters.referenceMode === "image") return 1;
   return 0;
+}
+
+export function isImageGenerationParameters(parameters: Pick<GenerationParameters, "mode" | "modelId">): boolean {
+  return parameters.mode === "text_to_image" || parameters.modelId.startsWith("jimeng-image-");
 }
 
 export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
@@ -94,6 +102,7 @@ export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
     supportedDurations: [5, 10],
     supportsAudioReference: false,
     maxAssetRefs: 2,
+    quotaStatus: "exhausted",
     pricing: {
       baseCostCents: 0,
       perSecondCents: 0,
@@ -112,6 +121,7 @@ export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
     supportedDurations: [5, 10],
     supportsAudioReference: false,
     maxAssetRefs: 2,
+    quotaStatus: "free_trial",
     pricing: {
       baseCostCents: 0,
       perSecondCents: 0,
@@ -129,6 +139,26 @@ export const DEFAULT_MODEL_CAPABILITIES = modelCapabilitySchema.array().parse([
     supportedResolutions: ["1080p"],
     supportedDurations: [5, 10],
     supportsAudioReference: false,
+    quotaStatus: "free_trial",
+    pricing: {
+      baseCostCents: 0,
+      perSecondCents: 0,
+      perAssetCents: 0,
+      currency: "CNY"
+    }
+  },
+  {
+    id: "jimeng-image-v3",
+    provider: "jimeng",
+    displayName: "即梦AI-图片生成3.0",
+    supportedModes: ["text_to_image"],
+    supportedReferenceModes: ["none"],
+    supportedRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    supportedResolutions: ["1080p"],
+    supportedDurations: [5],
+    supportsAudioReference: false,
+    maxAssetRefs: 0,
+    quotaStatus: "free_trial",
     pricing: {
       baseCostCents: 0,
       perSecondCents: 0,
@@ -156,6 +186,7 @@ export type AspectRatio = z.infer<typeof aspectRatioSchema>;
 export type VideoResolution = z.infer<typeof videoResolutionSchema>;
 export type VideoDurationSeconds = z.infer<typeof videoDurationSecondsSchema>;
 export type ModelPricing = z.infer<typeof modelPricingSchema>;
+export type ModelQuotaStatus = z.infer<typeof modelQuotaStatusSchema>;
 export type ModelCapability = z.infer<typeof modelCapabilitySchema>;
 export type GenerationParameters = z.infer<typeof generationParametersSchema>;
 export type ModelCompatibilityInput = z.infer<typeof modelCompatibilityInputSchema>;

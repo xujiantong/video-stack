@@ -51,8 +51,16 @@ export function createAssetRoutes(service: AssetService): FastifyPluginAsync {
     app.get("/assets/:assetId/content", async (request, reply) => {
       try {
         const { assetId } = assetParamsSchema.parse(request.params);
-        const result = await service.readAssetContent(assetId);
-        return reply.header("Content-Type", result.mimeType).send(result.bytes);
+        const result = await service.readAssetContent(assetId, request.headers.range);
+        reply.header("Accept-Ranges", "bytes").header("Cache-Control", "private, max-age=3600").header("Content-Type", result.mimeType);
+        if (result.range) {
+          return reply
+            .code(206)
+            .header("Content-Length", result.bytes.byteLength)
+            .header("Content-Range", `bytes ${result.range.start}-${result.range.end}/${result.sizeBytes}`)
+            .send(result.bytes);
+        }
+        return reply.header("Content-Length", result.bytes.byteLength).send(result.bytes);
       } catch (error) {
         return sendError(reply, error, "读取素材内容失败，请刷新后重试。");
       }
@@ -91,6 +99,16 @@ function sendError(reply: FastifyReply, error: unknown, fallbackMessage: string)
     });
   }
 
-  const status = parsed.data.error.code === "FORBIDDEN" ? 403 : parsed.data.error.code === "NOT_FOUND" ? 404 : 400;
+  const httpStatus = parsed.data.error.details?.httpStatus;
+  const status =
+    typeof httpStatus === "number" && Number.isInteger(httpStatus)
+      ? httpStatus
+      : parsed.data.error.code === "FORBIDDEN"
+        ? 403
+        : parsed.data.error.code === "NOT_FOUND"
+          ? 404
+          : 400;
+  const contentRange = parsed.data.error.details?.contentRange;
+  if (typeof contentRange === "string") reply.header("Content-Range", contentRange);
   return reply.code(status).send(parsed.data);
 }
